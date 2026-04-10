@@ -1,0 +1,149 @@
+{
+  "items": [
+    {
+      "sku": "NGK-BKR5E",
+      "upc": "070185924508",
+      "brand": "NGK",
+      "model": "BKR5E",
+      "type": "spark_plug",
+      "thread": "14mm x 1.25",
+      "reach": "19mm",
+      "hex": "16mm",
+      "gap_mm": 1.1,
+      "electrode": "Standard Copper",
+      "application": [
+        "Toyota Corolla 1.8L 2000-2019",
+        "Toyota Camry 2.4L 2002-2011",
+        "Hyundai Accent 1.6L 2012-2020"
+      ],
+      "price_usd": 3.50,
+      "stock": 120
+    },
+    {
+      "sku": "NGK-ILFR6A11",
+      "upc": "070185827762",
+      "brand": "NGK",
+      "model": "ILFR6A-11",
+      "type": "spark_plug",
+      "thread": "14mm x 1.25",
+      "reach": "26.5mm",
+      "hex": "16mm",
+      "gap_mm": 1.1,
+      "electrode": "Iridium IX",
+      "application": [
+        "Mitsubishi Outlander 2.4L 2003-2006",
+        "Mitsubishi Galant 2.4L 2004-2012"
+      ],
+      "price_usd": 9.80,
+      "stock": 45
+    },
+    {
+      "sku": "BOSCH-0242229659",
+      "upc": "028851154321",
+      "brand": "Bosch",
+      "model": "0242229659",
+      "type": "spark_plug",
+      "thread": "14mm x 1.25",
+      "reach": "19mm",
+      "hex": "16mm",
+      "gap_mm": 1.0,
+      "electrode": "Super Plus",
+      "application": [
+        "Chevrolet Aveo 1.6L 2004-2011",
+        "Opel Astra 1.6L 2000-2010"
+      ],
+      "price_usd": 4.20,
+      "stock": 80
+    },
+    {
+      "sku": "CHAMPION-RC12YC",
+      "upc": "010040400421",
+      "brand": "Champion",
+      "model": "RC12YC",
+      "type": "spark_plug",
+      "thread": "14mm x 1.25",
+      "reach": "19mm",
+      "hex": "20.6mm",
+      "gap_mm": 1.524,
+      "electrode": "Copper Plus",
+      "application": [
+        "Chevrolet C/K 5.7L 1988-2000",
+        "GMC Sierra 5.7L 1988-2000",
+        "Briggs & Stratton lawn engines"
+      ],
+      "price_usd": 2.90,
+      "stock": 200
+    },
+    {
+      "sku": "NGK-BKR6E",
+      "upc": "070185924515",
+      "brand": "NGK",
+      "model": "BKR6E",
+      "type": "spark_plug",
+      "thread": "14mm x 1.25",
+      "reach": "19mm",
+      "hex": "16mm",
+      "gap_mm": 0.8,
+      "electrode": "Standard Copper",
+      "application": [
+        "Honda Civic 1.6L 1996-2000",
+        "Honda CR-V 2.0L 1997-2001",
+        "Nissan Sentra 1.6L 1995-2006"
+      ],
+      "price_usd": 3.50,
+      "stock": 95
+    },
+    {
+      "sku": "DENSO-K20HR-U11",
+      "upc": "044902234078",
+      "brand": "Denso",
+      "model": "K20HR-U11",
+      "type": "spark_plug",
+      "thread": "14mm x 1.25",
+      "reach": "26.5mm",
+      "hex": "16mm",
+      "gap_mm": 1.1,
+      "electrode": "Iridium Long Life",
+      "application": [
+        "Toyota Land Cruiser 4.5L V8 2008-2021",
+        "Lexus LX570 5.7L V8 2008-2021"
+      ],
+      "price_usd": 14.50,
+      "stock": 30
+    },
+    {
+      "sku": "NGK-6375",
+      "upc": "070185049629",
+      "brand": "NGK",
+      "model": "6375",
+      "type": "diesel_glow_plug",
+      "thread": "M10 x 1.0",
+      "reach": "65mm",
+      "hex": "12mm",
+      "voltage": "11V",
+      "application": [
+        "Toyota Hilux 2.4L Diesel 2016-2022",
+        "Toyota Land Cruiser Prado 2.8L Diesel 2015-2022"
+      ],
+      "price_usd": 18.00,
+      "stock": 60
+    },
+    {
+      "sku": "BERU-GN001",
+      "upc": "035552830012",
+      "brand": "BERU",
+      "model": "GN001",
+      "type": "diesel_glow_plug",
+      "thread": "M10 x 1.0",
+      "reach": "68mm",
+      "hex": "12mm",
+      "voltage": "11V",
+      "application": [
+        "Volkswagen Amarok 2.0L TDI 2010-2022",
+        "Audi A4 2.0L TDI 2008-2016"
+      ],
+      "price_usd": 22.00,
+      "stock": 25
+    }
+  ]
+}

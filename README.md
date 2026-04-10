@@ -1,61 +1,129 @@
-# Turbobujias-pro
-Turbobujias web site
-# ⚡ Turbobujias AI Ecosystem
-**Intelligent E-commerce & AI Chatbot for Automotive Ignition and Diesel Systems.**
-Turbobujias is a high-performance ecosystem designed for the specialized sale of spark plugs, glow plugs, and diesel spare parts. It integrates a React/Node.js web platform with a multimodal AI Chatbot deployed on Hugging Face.
-## 🚀 Core Features
-### 🔍 Smart Search & Inventory
- * **Vectorial Search (RAG):** Powered by FAISS and HNSW for semantic search of spare parts.
- * **Universal Lookup:** Search by SKU, UPC, or technical measurements (thread, reach, hex size).
- * **QR/Barcode Scanner:** Integrated PWA tool for warehouse inventory management.
- * **Sourcing:** Technical data grounded on Sparkplugs.com and Mercado Libre Store.
-### 🤖 Turbobujias AI Chatbot (Hugging Face)
- * **Deployment:** Gradio-based interface hosted on Hugging Face Spaces.
- * **Multimodal capabilities:**
-   * **Text-to-Text:** Technical compatibility advice using Mistral/Llama-3.
-   * **Voice-to-Voice:** Speech recognition for mechanics in workshops (Whisper + gTTS).
-   * **Text-to-Image:** Visual generation of spark plug types and heat ranges.
- * **Learning Focus:** Continuous improvement based on user queries and technical manuals.
-### 💸 Payments & Localization (Venezuela)
- * **Multi-currency:** Real-time conversion (VES/USD) based on BCV rates.
- * **Local Payments:** Manual and API integration for Pago Móvil and Bank Transfers.
- * **Global Payments:** PayPal Smart Buttons integration.
-## 🛠️ Tech Stack
-### Frontend & Backend
- * **Web:** React.js / Next.js (SEO Optimized)
- * **State:** Redux Toolkit
- * **Backend:** Node.js + Express.js
- * **Database:** JSON (Initial/Free Tier) → MongoDB Atlas
- * **Styling:** Tailwind CSS
-### AI & Machine Learning
- * **Frameworks:** Python, Gradio, Transformers (Hugging Face)
- * **Vector DB:** FAISS / LangChain
- * **Embeddings:** sentence-transformers/all-MiniLM-L6-v2
- * **Models:** Mistral-7B / Stable Diffusion XL Turbo
-## 📦 Installation & Setup
-### 1. Web Platform (Node/React)
-```bash
-git clone [https://github.com/your-username/turbobujias-platform.git](https://github.com/your-username/turbobujias-platform.git)
-cd turbobujias-platform
-npm install
-npm run dev
+# Turbobujias Pro 🔧
+
+Full-stack e-commerce & AI platform for **Diesel and Spark Plug** auto parts (Venezuela market).
+
+---
+
+## 🗂️ Project Structure
 
 ```
-### 2. AI Chatbot (Hugging Face / Python)
+Turbobujias-pro/
+├── backend/              # Node.js + Express API
+│   ├── data/
+│   │   └── inventory.json
+│   ├── routes/
+│   ├── server.js
+│   └── package.json
+├── turbobujias-ai/       # Python + Gradio AI Chatbot (Hugging Face Spaces)
+│   ├── app.py
+│   └── requirements.txt
+└── turbobujias-web/      # React + Next.js Frontend
+    └── package.json
+```
+
+---
+
+## 🔍 Search by UPC / SKU
+
+The platform supports product lookup by:
+
+- **UPC** (Universal Product Code) – scan or enter the barcode printed on the box.
+- **SKU** (Stock Keeping Unit) – internal reference from the Turbobujias3646 Mercado Libre store.
+
+The backend exposes a `/api/inventory/search?q=<UPC_or_SKU>` endpoint that queries
+`data/inventory.json` and returns brand, thread size, application, and price in both currencies.
+
+---
+
+## 🤖 Smart AI Chatbot (Diesel / Spark Plugs)
+
+Powered by [Hugging Face Spaces](https://huggingface.co/spaces) using:
+
+| Component | Technology |
+|---|---|
+| Embedding model | `sentence-transformers/all-MiniLM-L6-v2` |
+| LLM | `mistralai/Mistral-7B-Instruct-v0.2` (via HuggingFaceHub) |
+| Vector store | `faiss-cpu` |
+| UI | `Gradio` |
+| Voice input | `openai-whisper` |
+
+The chatbot answers compatibility questions like:
+> *"Which spark plug fits a 2018 Toyota Corolla 1.8L?"*
+> *"¿Cuál bujía es compatible con un Hilux 2.7 gasolina?"*
+
+The React frontend calls the Space via the `/run/predict` endpoint or the
+official `@gradio/client` npm package.
+
+---
+
+## 💱 Dual Currency System (VES / USD)
+
+All prices are stored in **USD** in `inventory.json`.  
+The backend fetches the official BCV exchange rate and returns both:
+
+```json
+{
+  "sku": "NGK-BKR5E",
+  "price_usd": 3.50,
+  "price_ves": 127.40,
+  "exchange_rate": 36.40,
+  "rate_source": "BCV"
+}
+```
+
+The frontend displays prices in both currencies and lets the user toggle the preferred display.
+
+---
+
+## ⚙️ Setup
+
+### Backend (Node.js)
+
 ```bash
-git clone [https://huggingface.co/spaces/your-username/turbobujias-ai](https://huggingface.co/spaces/your-username/turbobujias-ai)
+cd backend
+npm install
+cp .env.example .env   # fill in secrets
+npm start
+```
+
+### AI Chatbot (Python)
+
+```bash
 cd turbobujias-ai
 pip install -r requirements.txt
 python app.py
-
 ```
-## 🗺️ Roadmap
- * [ ] **Phase 1:** Core inventory JSON and Node.js API setup.
- * [ ] **Phase 2:** RAG implementation with FAISS for technical specs.
- * [ ] **Phase 3:** Gradio UI deployment with Voice-to-Voice features.
- * [ ] **Phase 4:** Full integration with Mercado Libre API for stock syncing.
-## 🤝 Contact & Engagement
- * **Instagram:** @turbobujias
- * **Google Search:** Turbobujias Valencia
- * **Location:** Valencia, Carabobo, Venezuela.
-*Developed with focus on performance, SEO, and automotive precision.*
+
+### Frontend (Next.js)
+
+```bash
+cd turbobujias-web
+npm install
+npm run dev
+```
+
+---
+
+## 🚀 Deployment
+
+| Service | Platform |
+|---|---|
+| Backend API | Render / Railway (via GitHub Actions) |
+| AI Chatbot | Hugging Face Spaces |
+| Frontend | Vercel |
+
+GitHub Actions workflow (`.github/workflows/deploy-backend.yml`) auto-deploys
+the backend on every push to `main`.
+
+---
+
+## 📦 Payments
+
+- **PayPal IPN** – webhook at `POST /api/payments/paypal`
+- **Pago Móvil** – receipt image upload + validation at `POST /api/payments/pagomovil`
+
+---
+
+## 📄 License
+
+MIT
