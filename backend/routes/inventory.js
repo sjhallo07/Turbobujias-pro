@@ -19,9 +19,11 @@ async function getExchangeRate() {
   try {
     const response = await axios.get(process.env.BCV_API_URL, { timeout: 5000 });
     // Pattern looks for the USD row followed by the formatted rate, e.g. "36,40"
-    const match = response.data.match(/USD.*?([\d,]+\.\d{2})/);
+    // or "1.234,56" (comma decimal, optional dot thousands separators).
+    const match = response.data.match(/USD.*?(\d{1,3}(?:\.\d{3})*,\d{2}|\d+,\d{2})/);
     if (match) {
-      return parseFloat(match[1].replace(',', ''));
+      const normalizedRate = match[1].replace(/\./g, '').replace(',', '.');
+      return parseFloat(normalizedRate);
     }
     console.warn('BCV scrape failed: rate pattern not found in response');
   } catch (err) {
