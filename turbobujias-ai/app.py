@@ -11,6 +11,7 @@ Stack:
 
 import json
 import os
+import sys
 from pathlib import Path
 
 import faiss
@@ -23,6 +24,20 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.llms import HuggingFaceHub
 from langchain_community.vectorstores import FAISS
 from langchain.docstore.document import Document
+
+# ─────────────────────────────────────────────
+# 0. Validate required environment variables
+# ─────────────────────────────────────────────
+HF_TOKEN = os.environ.get("HF_TOKEN", "").strip()
+if not HF_TOKEN:
+    print(
+        "ERROR: HF_TOKEN environment variable is not set. "
+        "Set it to a Hugging Face API token with inference permissions "
+        "(required for the Mistral-7B-Instruct model). "
+        "On Hugging Face Spaces add it as a Space Secret named HF_TOKEN.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 # ─────────────────────────────────────────────
 # 1. Load inventory data
@@ -54,7 +69,6 @@ def load_inventory() -> list[Document]:
 # 2. Build FAISS vector store
 # ─────────────────────────────────────────────
 EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-HF_TOKEN = os.environ.get("HF_TOKEN", "")
 
 print("Loading embeddings model…")
 embeddings = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
@@ -92,26 +106,29 @@ whisper_model = whisper.load_model("base")
 # ─────────────────────────────────────────────
 # 5. Helper functions
 # ─────────────────────────────────────────────
-def answer_text(query: str, history: list) -> tuple[str, list]:
-    """Process a text query and return an answer."""
+def answer_text(query: str, history: list) -> tuple[str, list, list]:
+    """Process a text query and return (cleared_input, updated_chatbot, updated_state)."""
     if not query.strip():
-        return "", history
+        return "", history, history
     result = qa_chain({"query": query})
     answer = result["result"].strip()
     sources = [doc.metadata.get("sku", "?") for doc in result.get("source_documents", [])]
     if sources:
         answer += f"\n\n*Sources: {', '.join(sources)}*"
-    history.append((query, answer))
-    return "", history
+    updated_history = history + [(query, answer)]
+    return "", updated_history, updated_history
 
 
-def answer_voice(audio_path: str | None, history: list) -> tuple[str, list]:
-    """Transcribe voice input with Whisper then run QA."""
+def answer_voice(audio_path: str | None, history: list) -> tuple[list, list]:
+    """Transcribe voice input with Whisper then run QA.
+
+    Returns (updated_chatbot, updated_state).
+    """
     if audio_path is None:
-        return history
+        return history, history
     transcription = whisper_model.transcribe(audio_path)["text"]
-    _, history = answer_text(transcription, history)
-    return history
+    _, updated_history, updated_state = answer_text(transcription, history)
+    return updated_history, updated_state
 
 
 # ─────────────────────────────────────────────
@@ -142,12 +159,25 @@ with gr.Blocks(title="Turbobujias AI Assistant", theme=gr.themes.Soft()) as demo
         audio_input = gr.Audio(type="filepath", label="Record your question")
         voice_btn = gr.Button("Transcribe & Ask")
 
-    # Text events
-    send_btn.click(answer_text, inputs=[txt_input, state], outputs=[txt_input, chatbot])
-    txt_input.submit(answer_text, inputs=[txt_input, state], outputs=[txt_input, chatbot])
+    # Text events — state is both an input (existing history) and an output
+    # (updated history), so chat is correctly accumulated across turns.
+    send_btn.click(
+        answer_text,
+        inputs=[txt_input, state],
+        outputs=[txt_input, chatbot, state],
+    )
+    txt_input.submit(
+        answer_text,
+        inputs=[txt_input, state],
+        outputs=[txt_input, chatbot, state],
+    )
 
-    # Voice events
-    voice_btn.click(answer_voice, inputs=[audio_input, state], outputs=[chatbot])
+    # Voice events — same state wiring as text path
+    voice_btn.click(
+        answer_voice,
+        inputs=[audio_input, state],
+        outputs=[chatbot, state],
+    )
 
     gr.Markdown(
         "---\n*Powered by [Hugging Face](https://huggingface.co) · "
@@ -156,3 +186,4 @@ with gr.Blocks(title="Turbobujias AI Assistant", theme=gr.themes.Soft()) as demo
 
 if __name__ == "__main__":
     demo.launch()
+
