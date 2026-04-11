@@ -109,7 +109,7 @@ Use `.env.local` inside `turbobujias-web/` to switch between localhost, local ne
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:3001/api
 NEXT_PUBLIC_HF_SPACE_URL=https://sjhallo07-turbobujias-ai.hf.space
-NEXT_PUBLIC_WHATSAPP_URL=https://api.whatsapp.com/send?phone=584001112233
+NEXT_PUBLIC_WHATSAPP_URL=https://api.whatsapp.com/send
 NEXT_PUBLIC_INSTAGRAM_URL=https://www.instagram.com/turbobujiaspro/
 NEXT_PUBLIC_MERCADOLIBRE_URL=https://www.mercadolibre.com.ve/
 NEXT_PUBLIC_PAYPAL_URL=https://www.paypal.com/

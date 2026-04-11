@@ -83,7 +83,7 @@ function buildWhatsAppUrl(message) {
     url.searchParams.set("text", message);
     return url.toString();
   } catch (error) {
-    console.warn("URL de WhatsApp inválida, usando el fallback estándar.", error);
+    console.warn(`URL de WhatsApp inválida (${WHATSAPP_URL}), usando el fallback estándar.`, error);
     return `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
   }
 }
@@ -170,7 +170,8 @@ function useThemePreference() {
       if (storedTheme && THEME_OPTIONS.some((option) => option.value === storedTheme)) {
         setThemeMode(storedTheme);
       }
-    } catch {
+    } catch (error) {
+      console.warn("No se pudo leer tb-theme-mode desde localStorage.", error);
       return;
     }
   }, []);
@@ -193,7 +194,8 @@ function useThemePreference() {
   useEffect(() => {
     try {
       window.localStorage.setItem("tb-theme-mode", themeMode);
-    } catch {
+    } catch (error) {
+      console.warn("No se pudo guardar tb-theme-mode en localStorage.", error);
       return;
     }
   }, [themeMode]);
@@ -808,7 +810,9 @@ export default function Storefront() {
               una URL pública en producción mediante variables de entorno.
             </p>
             <ul className="feature-list">
-              <li>Local: `NEXT_PUBLIC_API_URL=http://localhost:3001/api`.</li>
+              <li>
+                Local: <code>NEXT_PUBLIC_API_URL=http://localhost:3001/api</code>.
+              </li>
               <li>Móvil: usa la IP LAN del backend para Android/iOS.</li>
               <li>Producción: publica API, chatbot y enlaces de pago por variables de entorno.</li>
             </ul>
