@@ -14,10 +14,10 @@ import os
 import sys
 from pathlib import Path
 
-import faiss
 import gradio as gr
-import numpy as np
+import requests
 import whisper
+from dotenv import load_dotenv
 from langchain.chains import RetrievalQA
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
@@ -25,16 +25,61 @@ from langchain_community.llms import HuggingFaceHub
 from langchain_community.vectorstores import FAISS
 from langchain.docstore.document import Document
 
+APP_DIR = Path(__file__).parent
+load_dotenv(APP_DIR / ".env")
+
 # ─────────────────────────────────────────────
 # 0. Validate required environment variables
 # ─────────────────────────────────────────────
-HF_TOKEN = os.environ.get("HF_TOKEN", "").strip()
-if not HF_TOKEN:
+HF_TOKEN = (
+    os.environ.get("HF_TOKEN", "").strip()
+    or os.environ.get("HUGGINGFACEHUB_API_TOKEN", "").strip()
+)
+HF_MODEL_REPO_ID = os.environ.get(
+    "HF_MODEL_REPO_ID",
+    "mistralai/Mistral-7B-Instruct-v0.2",
+).strip()
+GITHUB_MODELS_TOKEN = (
+    os.environ.get("GITHUB_MODELS_TOKEN", "").strip()
+    or os.environ.get("GITHUB_TOKEN", "").strip()
+)
+GITHUB_MODELS_MODEL = os.environ.get(
+    "GITHUB_MODELS_MODEL",
+    "openai/gpt-4.1",
+).strip()
+GITHUB_MODELS_ORG = os.environ.get("GITHUB_MODELS_ORG", "").strip()
+GITHUB_MODELS_API_VERSION = os.environ.get(
+    "GITHUB_MODELS_API_VERSION",
+    "2026-03-10",
+).strip()
+LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "").strip().lower()
+
+if not LLM_PROVIDER:
+    LLM_PROVIDER = "github" if GITHUB_MODELS_TOKEN else "huggingface"
+
+if LLM_PROVIDER not in {"github", "huggingface"}:
+    print(
+        "ERROR: LLM_PROVIDER must be either 'github' or 'huggingface'.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if LLM_PROVIDER == "huggingface" and not HF_TOKEN:
     print(
         "ERROR: HF_TOKEN environment variable is not set. "
         "Set it to a Hugging Face API token with inference permissions "
         "(required for the Mistral-7B-Instruct model). "
-        "On Hugging Face Spaces add it as a Space Secret named HF_TOKEN.",
+        "On Hugging Face Spaces add it as a Space Secret named HF_TOKEN "
+        "or HUGGINGFACEHUB_API_TOKEN.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if LLM_PROVIDER == "github" and not GITHUB_MODELS_TOKEN:
+    print(
+        "ERROR: GITHUB_MODELS_TOKEN environment variable is not set. "
+        "Add a GitHub personal access token with models:read permission. "
+        "You can also use GITHUB_TOKEN if your runtime provides one.",
         file=sys.stderr,
     )
     sys.exit(1)
@@ -42,7 +87,15 @@ if not HF_TOKEN:
 # ─────────────────────────────────────────────
 # 1. Load inventory data
 # ─────────────────────────────────────────────
-INVENTORY_PATH = Path(__file__).parent / "inventory.json"
+INVENTORY_PATH = APP_DIR / "inventory.json"
+
+if not INVENTORY_PATH.exists():
+    print(
+        f"ERROR: inventory file not found at {INVENTORY_PATH}. "
+        "Make sure inventory.json is included in the deployment bundle.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
 
 def load_inventory() -> list[Document]:
     """Convert inventory.json items into LangChain Documents."""
@@ -83,18 +136,21 @@ retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 # ─────────────────────────────────────────────
 # 3. Set up LLM (Mistral-7B via HuggingFaceHub)
 # ─────────────────────────────────────────────
-llm = HuggingFaceHub(
-    repo_id="mistralai/Mistral-7B-Instruct-v0.2",
-    huggingfacehub_api_token=HF_TOKEN,
-    model_kwargs={"temperature": 0.3, "max_new_tokens": 512},
-)
+qa_chain = None
 
-qa_chain = RetrievalQA.from_chain_type(
-    llm=llm,
-    chain_type="stuff",
-    retriever=retriever,
-    return_source_documents=True,
-)
+if LLM_PROVIDER == "huggingface":
+    llm = HuggingFaceHub(
+        repo_id=HF_MODEL_REPO_ID,
+        huggingfacehub_api_token=HF_TOKEN,
+        model_kwargs={"temperature": 0.3, "max_new_tokens": 512},
+    )
+
+    qa_chain = RetrievalQA.from_chain_type(
+        llm=llm,
+        chain_type="stuff",
+        retriever=retriever,
+        return_source_documents=True,
+    )
 
 # ─────────────────────────────────────────────
 # 4. Whisper model for voice transcription
@@ -106,13 +162,73 @@ whisper_model = whisper.load_model("base")
 # ─────────────────────────────────────────────
 # 5. Helper functions
 # ─────────────────────────────────────────────
+def github_models_endpoint() -> str:
+    if GITHUB_MODELS_ORG:
+        return f"https://models.github.ai/orgs/{GITHUB_MODELS_ORG}/inference/chat/completions"
+    return "https://models.github.ai/inference/chat/completions"
+
+
+def answer_with_github_models(query: str) -> tuple[str, list[str]]:
+    docs = retriever.invoke(query)
+    context = "\n\n".join(doc.page_content for doc in docs)
+    payload = {
+        "model": GITHUB_MODELS_MODEL,
+        "messages": [
+            {
+                "role": "system",
+                "content": (
+                    "You are Turbobujias AI Assistant. Answer only with help from the "
+                    "provided catalog context when possible. If the catalog does not contain "
+                    "enough information, say so clearly and avoid inventing part numbers or fitments."
+                ),
+            },
+            {
+                "role": "user",
+                "content": (
+                    f"Catalog context:\n{context}\n\n"
+                    f"Customer question: {query}\n\n"
+                    "Respond in the same language as the customer when possible."
+                ),
+            },
+        ],
+        "temperature": 0.3,
+        "max_tokens": 512,
+        "stream": False,
+    }
+    headers = {
+        "Accept": "application/vnd.github+json",
+        "Authorization": f"Bearer {GITHUB_MODELS_TOKEN}",
+        "X-GitHub-Api-Version": GITHUB_MODELS_API_VERSION,
+        "Content-Type": "application/json",
+    }
+    response = requests.post(
+        github_models_endpoint(),
+        headers=headers,
+        json=payload,
+        timeout=90,
+    )
+    response.raise_for_status()
+    result = response.json()
+    answer = result["choices"][0]["message"]["content"].strip()
+    sources = [doc.metadata.get("sku", "?") for doc in docs]
+    return answer, sources
+
+
+def answer_query(query: str) -> tuple[str, list[str]]:
+    if LLM_PROVIDER == "github":
+        return answer_with_github_models(query)
+
+    result = qa_chain({"query": query})
+    answer = result["result"].strip()
+    sources = [doc.metadata.get("sku", "?") for doc in result.get("source_documents", [])]
+    return answer, sources
+
+
 def answer_text(query: str, history: list) -> tuple[str, list, list]:
     """Process a text query and return (cleared_input, updated_chatbot, updated_state)."""
     if not query.strip():
         return "", history, history
-    result = qa_chain({"query": query})
-    answer = result["result"].strip()
-    sources = [doc.metadata.get("sku", "?") for doc in result.get("source_documents", [])]
+    answer, sources = answer_query(query)
     if sources:
         answer += f"\n\n*Sources: {', '.join(sources)}*"
     updated_history = history + [(query, answer)]
@@ -185,5 +301,9 @@ with gr.Blocks(title="Turbobujias AI Assistant", theme=gr.themes.Soft()) as demo
     )
 
 if __name__ == "__main__":
-    demo.launch()
+    demo.queue(default_concurrency_limit=2).launch(
+        server_name=os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0"),
+        server_port=int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", "7860"))),
+        show_error=True,
+    )
 

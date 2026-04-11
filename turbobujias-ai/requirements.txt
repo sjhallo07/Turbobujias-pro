@@ -8,3 +8,5 @@ huggingface-hub>=0.22.2
 openai-whisper>=20231117
 torch>=2.2.2
 accelerate>=0.29.2
+python-dotenv>=1.0.1
+requests>=2.32.0
