@@ -18,8 +18,21 @@ import {
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 const HF_SPACE_URL =
   process.env.NEXT_PUBLIC_HF_SPACE_URL || "https://sjhallo07-turbobujias-ai.hf.space";
+const WHATSAPP_URL =
+  process.env.NEXT_PUBLIC_WHATSAPP_URL || "https://api.whatsapp.com/send";
+const INSTAGRAM_URL = process.env.NEXT_PUBLIC_INSTAGRAM_URL || "https://www.instagram.com/";
+const MERCADOLIBRE_URL =
+  process.env.NEXT_PUBLIC_MERCADOLIBRE_URL || "https://www.mercadolibre.com.ve/";
+const PAYPAL_URL = process.env.NEXT_PUBLIC_PAYPAL_URL || "https://www.paypal.com/";
+const BINANCE_PAY_URL =
+  process.env.NEXT_PUBLIC_BINANCE_PAY_URL || "https://pay.binance.com/";
 const TAX_RATE = 0.16;
 const SHIPPING_USD = 8;
+const THEME_OPTIONS = [
+  { value: "system", label: "Sistema" },
+  { value: "light", label: "Claro" },
+  { value: "dark", label: "Oscuro" },
+];
 const PARTNER_BRAND_COPY = {
   NGK: "Encendido confiable para alta rotación y taller.",
   Bosch: "Cobertura europea y desempeño estable en calle.",
@@ -62,6 +75,37 @@ function renderPrice(item, currencyMode) {
   }
 
   return formatCurrency(item.price_usd, "USD");
+}
+
+function buildWhatsAppUrl(message) {
+  try {
+    const url = new URL(WHATSAPP_URL);
+    url.searchParams.set("text", message);
+    return url.toString();
+  } catch {
+    return `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+  }
+}
+
+function buildCheckoutMessage({ items, currencyCode, exchangeRate, subtotalDisplay, totalDisplay }) {
+  if (!items.length) {
+    return "Hola, quiero asesoría para comprar repuestos en Turbobujias Pro.";
+  }
+
+  const lines = items.map(
+    (item) =>
+      `• ${item.quantity} x ${item.brand} ${item.model} (${item.sku}) = ${formatCurrency(
+        currencyCode === "VES" ? item.lineTotal * exchangeRate : item.lineTotal,
+        currencyCode
+      )}`
+  );
+
+  return [
+    "Hola, quiero completar este checkout con Turbobujias Pro:",
+    ...lines,
+    `Subtotal estimado: ${formatCurrency(subtotalDisplay, currencyCode)}`,
+    `Total estimado: ${formatCurrency(totalDisplay, currencyCode)}`,
+  ].join("\n");
 }
 
 function useInventory() {
@@ -110,6 +154,35 @@ function useInventory() {
   }, []);
 
   return { items, exchangeRate, rateSource, isLoading, error };
+}
+
+function useThemePreference() {
+  const [themeMode, setThemeMode] = useState("system");
+
+  useEffect(() => {
+    const storedTheme = window.localStorage.getItem("tb-theme-mode");
+    if (storedTheme && THEME_OPTIONS.some((option) => option.value === storedTheme)) {
+      setThemeMode(storedTheme);
+    }
+  }, []);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+
+    function applyTheme() {
+      const resolvedTheme = themeMode === "system" ? (media.matches ? "dark" : "light") : themeMode;
+      document.documentElement.dataset.theme = resolvedTheme;
+      document.documentElement.style.colorScheme = resolvedTheme;
+    }
+
+    applyTheme();
+    media.addEventListener("change", applyTheme);
+    window.localStorage.setItem("tb-theme-mode", themeMode);
+
+    return () => media.removeEventListener("change", applyTheme);
+  }, [themeMode]);
+
+  return { themeMode, setThemeMode };
 }
 
 function InventoryCard({ item, currencyMode, onAdd }) {
@@ -205,6 +278,14 @@ function CartPanel({ currencyMode, exchangeRate }) {
   const shippingDisplay = currencyMode === "VES" ? shippingUsd * exchangeRate : shippingUsd;
   const totalDisplay = currencyMode === "VES" ? totalUsd * exchangeRate : totalUsd;
   const currencyCode = currencyMode === "VES" ? "VES" : "USD";
+  const checkoutMessage = buildCheckoutMessage({
+    items,
+    currencyCode,
+    exchangeRate,
+    subtotalDisplay,
+    totalDisplay,
+  });
+  const whatsappCheckoutUrl = buildWhatsAppUrl(checkoutMessage);
 
   return (
     <aside className="cart-panel">
@@ -289,9 +370,14 @@ function CartPanel({ currencyMode, exchangeRate }) {
           </div>
 
           <div className="actions-row">
-            <button className="button-primary" type="button">
-              Continuar al pago
-            </button>
+            <a
+              className="button-primary"
+              href={whatsappCheckoutUrl}
+              rel="noreferrer"
+              target="_blank"
+            >
+              Checkout por WhatsApp
+            </a>
             <button
               className="button-secondary"
               onClick={() => dispatch(clearCart())}
@@ -299,6 +385,48 @@ function CartPanel({ currencyMode, exchangeRate }) {
             >
               Vaciar carrito
             </button>
+          </div>
+
+          <div className="checkout-grid">
+            <article className="checkout-card checkout-card-primary">
+              <strong>Checkout web asistido</strong>
+              <p>
+                Envía el resumen del carrito en una ventana secundaria y confirma entrega, pago y
+                datos del cliente por WhatsApp.
+              </p>
+              <a href={whatsappCheckoutUrl} rel="noreferrer" target="_blank">
+                Abrir checkout asistido
+              </a>
+            </article>
+            <article className="checkout-card">
+              <strong>Mercado Libre</strong>
+              <p>Completa la compra desde la vitrina pública cuando el cliente prefiera marketplace.</p>
+              <a href={MERCADOLIBRE_URL} rel="noreferrer" target="_blank">
+                Ir a Mercado Libre
+              </a>
+            </article>
+            <article className="checkout-card">
+              <strong>PayPal</strong>
+              <p>Alternativa rápida para ventas internacionales o clientes que pagan en USD.</p>
+              <a href={PAYPAL_URL} rel="noreferrer" target="_blank">
+                Ir a PayPal
+              </a>
+            </article>
+            <article className="checkout-card">
+              <strong>Zelle / Binance Pay</strong>
+              <p>
+                Coordina Zelle por atención directa o abre Binance Pay en otra ventana para pagos
+                digitales.
+              </p>
+              <div className="actions-row">
+                <a href={whatsappCheckoutUrl} rel="noreferrer" target="_blank">
+                  Coordinar Zelle
+                </a>
+                <a href={BINANCE_PAY_URL} rel="noreferrer" target="_blank">
+                  Abrir Binance Pay
+                </a>
+              </div>
+            </article>
           </div>
         </>
       )}
@@ -309,11 +437,15 @@ function CartPanel({ currencyMode, exchangeRate }) {
 export default function Storefront() {
   const dispatch = useDispatch();
   const { items, exchangeRate, rateSource, isLoading, error } = useInventory();
+  const { themeMode, setThemeMode } = useThemePreference();
   const [query, setQuery] = useState("");
   const [brand, setBrand] = useState("all");
   const [category, setCategory] = useState("all");
   const [vehicle, setVehicle] = useState("");
   const [currencyMode, setCurrencyMode] = useState("USD");
+  const floatingWhatsAppUrl = buildWhatsAppUrl(
+    "Hola, necesito ayuda con catálogo, pagos o disponibilidad en Turbobujias Pro."
+  );
 
   const brands = useMemo(() => {
     return [...new Set(items.map((item) => item.brand))].sort();
@@ -385,8 +517,9 @@ export default function Storefront() {
   }, [items]);
 
   return (
-    <main className="page-shell">
-      <section className="hero">
+    <>
+      <main className="page-shell">
+        <section className="hero">
         <div className="hero-badge">Valencia · Carabobo · Venezuela</div>
 
         <div className="hero-grid">
@@ -438,6 +571,20 @@ export default function Storefront() {
                 Abrir chatbot IA
               </a>
             </div>
+
+            <div className="theme-toolbar">
+              <span className="muted">Tema</span>
+              {THEME_OPTIONS.map((option) => (
+                <button
+                  className={`button-chip ${themeMode === option.value ? "active" : ""}`}
+                  key={option.value}
+                  onClick={() => setThemeMode(option.value)}
+                  type="button"
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
 
           <div className="stats-grid">
@@ -455,9 +602,33 @@ export default function Storefront() {
             </div>
           </div>
         </div>
-      </section>
+        </section>
 
-      <section className="content-grid branded-content">
+        <section className="contact-strip">
+          <article className="contact-card whatsapp-card">
+            <strong>WhatsApp ventas</strong>
+            <p>Botón flotante y acceso directo para cotizaciones, Zelle y seguimiento postventa.</p>
+            <a href={floatingWhatsAppUrl} rel="noreferrer" target="_blank">
+              Escribir por WhatsApp
+            </a>
+          </article>
+          <article className="contact-card instagram-card">
+            <strong>Instagram comercial</strong>
+            <p>Abre el perfil en ventana secundaria para mostrar catálogo, historias y promociones.</p>
+            <a href={INSTAGRAM_URL} rel="noreferrer" target="_blank">
+              Abrir Instagram
+            </a>
+          </article>
+          <article className="contact-card theme-card">
+            <strong>Landing moderna y adaptable</strong>
+            <p>
+              Tema claro/oscuro/sistema, diseño responsive para Android/iOS y acciones rápidas de
+              contacto y checkout.
+            </p>
+          </article>
+        </section>
+
+        <section className="content-grid branded-content">
         <div className="panel">
           <div className="section-heading">
             <div>
@@ -506,9 +677,9 @@ export default function Storefront() {
             ))}
           </div>
         </div>
-      </section>
+        </section>
 
-      <section className="content-grid">
+        <section className="content-grid">
         <div className="panel">
           <h2>Búsqueda inteligente</h2>
           <p>
@@ -593,9 +764,9 @@ export default function Storefront() {
         </div>
 
         <CartPanel currencyMode={currencyMode} exchangeRate={exchangeRate} />
-      </section>
+        </section>
 
-      <section className="support-grid" style={{ marginTop: "1.5rem" }}>
+        <section className="support-grid" style={{ marginTop: "1.5rem" }}>
         <div className="support-card">
           <h3>Panel rápido de ventas</h3>
           <p>
@@ -617,9 +788,21 @@ export default function Storefront() {
           </p>
           <QrScanner onDetected={setQuery} />
         </div>
-      </section>
+          <div className="support-card">
+            <h3>Entorno local, IP local y producción</h3>
+            <p>
+              La app puede apuntar a localhost, a la IP local del backend para pruebas móviles o a
+              una URL pública en producción mediante variables de entorno.
+            </p>
+            <ul className="feature-list">
+              <li>Local: `NEXT_PUBLIC_API_URL=http://localhost:3001/api`.</li>
+              <li>Móvil: usa la IP LAN del backend para Android/iOS.</li>
+              <li>Producción: publica API, chatbot y enlaces de pago por variables de entorno.</li>
+            </ul>
+          </div>
+        </section>
 
-      <section style={{ marginTop: "1.5rem" }}>
+        <section style={{ marginTop: "1.5rem" }}>
         <div className="panel">
           <h2>Catálogo disponible</h2>
           <p>
@@ -651,11 +834,34 @@ export default function Storefront() {
             </div>
           )}
         </div>
-      </section>
+        </section>
 
-      <p className="footer-note">
-        Frontend Next.js listo para continuar con checkout, login, panel admin y automatizaciones IA.
-      </p>
-    </main>
+        <p className="footer-note">
+          Frontend Next.js listo para trabajar con localhost, IP local, URL pública y checkout
+          asistido en una experiencia responsive.
+        </p>
+      </main>
+
+      <div className="floating-contact-dock" aria-label="Accesos rápidos de contacto">
+        <a
+          aria-label="Contactar por WhatsApp"
+          className="floating-button whatsapp"
+          href={floatingWhatsAppUrl}
+          rel="noreferrer"
+          target="_blank"
+        >
+          WA
+        </a>
+        <a
+          aria-label="Abrir Instagram"
+          className="floating-button instagram"
+          href={INSTAGRAM_URL}
+          rel="noreferrer"
+          target="_blank"
+        >
+          IG
+        </a>
+      </div>
+    </>
   );
 }

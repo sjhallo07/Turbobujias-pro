@@ -15,6 +15,19 @@
   font-family: Arial, Helvetica, sans-serif;
 }
 
+:root[data-theme="light"] {
+  color-scheme: light;
+  --background: #eff4ff;
+  --surface: #ffffff;
+  --surface-soft: #eef3ff;
+  --border: rgba(14, 31, 77, 0.1);
+  --text: #0d1730;
+  --text-soft: #50617f;
+  --accent: #0055ff;
+  --accent-soft: rgba(0, 85, 255, 0.12);
+  --shadow: 0 20px 50px rgba(26, 50, 94, 0.12);
+}
+
 * {
   box-sizing: border-box;
 }
@@ -25,7 +38,7 @@ body {
   min-height: 100%;
   background:
     radial-gradient(circle at top, rgba(0, 85, 255, 0.16), transparent 34%),
-    linear-gradient(180deg, #050816 0%, #090d18 100%);
+    linear-gradient(180deg, var(--background) 0%, color-mix(in srgb, var(--background) 92%, #000 8%) 100%);
   color: var(--text);
 }
 
@@ -61,8 +74,23 @@ button {
   margin-bottom: 1.5rem;
   border: 1px solid var(--border);
   border-radius: 28px;
-  background: linear-gradient(135deg, rgba(16, 21, 38, 0.94), rgba(8, 13, 24, 0.94));
+  background: linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--surface) 94%, transparent),
+    color-mix(in srgb, var(--surface-soft) 90%, transparent)
+  );
   box-shadow: var(--shadow);
+}
+
+.contact-strip,
+.checkout-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.contact-strip {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin: 0 0 1.5rem;
 }
 
 .hero-badge,
@@ -79,8 +107,8 @@ button {
 .hero-badge {
   width: fit-content;
   background: var(--accent-soft);
-  color: #dbe8ff;
-  border: 1px solid rgba(0, 85, 255, 0.32);
+  color: color-mix(in srgb, var(--text) 84%, #dbe8ff 16%);
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent);
 }
 
 .hero h1 {
@@ -102,8 +130,8 @@ button {
   width: 96px;
   height: 96px;
   border-radius: 28px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--surface-soft) 80%, transparent);
+  border: 1px solid var(--border);
 }
 
 .brand-icon,
@@ -144,7 +172,7 @@ button {
 
 .support-grid,
 .filters-grid {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
 }
 
 .panel,
@@ -153,10 +181,12 @@ button {
 .product-card,
 .cart-panel,
 .support-card,
-.scanner-card {
+.scanner-card,
+.contact-card,
+.checkout-card {
   border: 1px solid var(--border);
   border-radius: 24px;
-  background: rgba(16, 21, 38, 0.88);
+  background: color-mix(in srgb, var(--surface) 92%, transparent);
   box-shadow: var(--shadow);
 }
 
@@ -165,7 +195,9 @@ button {
 .stat-card,
 .support-card,
 .scanner-card,
-.cart-panel {
+.cart-panel,
+.contact-card,
+.checkout-card {
   padding: 1.25rem;
 }
 
@@ -206,8 +238,8 @@ button {
   width: 100%;
   padding: 0.85rem 1rem;
   color: var(--text);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
+  border: 1px solid var(--border);
   border-radius: 14px;
 }
 
@@ -217,10 +249,16 @@ button {
 
 .button-row,
 .actions-row,
-.cart-actions {
+.cart-actions,
+.theme-toolbar {
   display: flex;
   flex-wrap: wrap;
   gap: 0.75rem;
+}
+
+.theme-toolbar {
+  align-items: center;
+  margin-top: 1rem;
 }
 
 .button-primary,
@@ -247,21 +285,21 @@ button {
 
 .button-secondary,
 .qty-button {
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--surface-soft) 76%, transparent);
   color: var(--text);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
 }
 
 .button-chip {
   background: transparent;
   color: var(--text-soft);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  border: 1px solid var(--border);
 }
 
 .button-chip.active {
   background: var(--accent-soft);
-  color: #dbe8ff;
-  border-color: rgba(0, 85, 255, 0.4);
+  color: color-mix(in srgb, var(--text) 84%, #dbe8ff 16%);
+  border-color: color-mix(in srgb, var(--accent) 40%, transparent);
 }
 
 .autocomplete {
@@ -277,8 +315,8 @@ button {
   text-align: left;
   padding: 0.85rem 1rem;
   border-radius: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-soft) 72%, transparent);
   color: var(--text);
 }
 
@@ -302,7 +340,7 @@ button {
   justify-content: space-between;
   align-items: flex-start;
   gap: 1rem;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  border-bottom: 1px solid var(--border);
 }
 
 .product-card-body {
@@ -311,7 +349,7 @@ button {
 }
 
 .product-card-footer {
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid var(--border);
 }
 
 .product-card h3,
@@ -325,7 +363,7 @@ button {
 
 .pill,
 .tag {
-  background: rgba(255, 255, 255, 0.06);
+  background: color-mix(in srgb, var(--surface-soft) 80%, transparent);
   color: var(--text-soft);
 }
 
@@ -356,11 +394,13 @@ button {
 }
 
 .brand-card,
-.review-card {
-  border: 1px solid rgba(255, 255, 255, 0.08);
+.review-card,
+.contact-card,
+.checkout-card {
+  border: 1px solid var(--border);
   border-radius: 20px;
   padding: 1rem;
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--surface-soft) 70%, transparent);
 }
 
 .brand-card p,
@@ -381,7 +421,7 @@ button {
   height: 44px;
   border-radius: 14px;
   background: var(--accent-soft);
-  color: #dbe8ff;
+  color: color-mix(in srgb, var(--text) 84%, #dbe8ff 16%);
   font-weight: 700;
 }
 
@@ -439,7 +479,7 @@ button {
   min-height: 220px;
   border-radius: 18px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--surface-soft) 70%, transparent);
 }
 
 .scanner-region:empty::before {
@@ -456,7 +496,7 @@ button {
 
 .cart-item {
   border-radius: 18px;
-  background: rgba(255, 255, 255, 0.03);
+  background: color-mix(in srgb, var(--surface-soft) 70%, transparent);
 }
 
 .cart-item-header,
@@ -479,9 +519,73 @@ button {
 
 .summary-line.total {
   padding-top: 1rem;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  border-top: 1px solid var(--border);
   font-size: 1.05rem;
   font-weight: 700;
+}
+
+.checkout-grid {
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  margin-top: 1rem;
+}
+
+.checkout-card p,
+.contact-card p {
+  color: var(--text-soft);
+}
+
+.checkout-card a,
+.contact-card a {
+  display: inline-flex;
+  margin-top: 0.75rem;
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.checkout-card-primary {
+  background: linear-gradient(135deg, rgba(0, 85, 255, 0.16), rgba(44, 125, 255, 0.08));
+}
+
+.whatsapp-card {
+  background: linear-gradient(135deg, rgba(37, 211, 102, 0.16), rgba(37, 211, 102, 0.06));
+}
+
+.instagram-card {
+  background:
+    linear-gradient(135deg, rgba(225, 48, 108, 0.16), rgba(88, 81, 219, 0.1)),
+    color-mix(in srgb, var(--surface-soft) 78%, transparent);
+}
+
+.theme-card {
+  background: linear-gradient(135deg, rgba(0, 85, 255, 0.12), rgba(255, 176, 32, 0.12));
+}
+
+.floating-contact-dock {
+  position: fixed;
+  right: 1rem;
+  bottom: 1rem;
+  display: grid;
+  gap: 0.75rem;
+  z-index: 20;
+}
+
+.floating-button {
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  border-radius: 999px;
+  color: #fff;
+  box-shadow: var(--shadow);
+  font-weight: 700;
+}
+
+.floating-button.whatsapp {
+  background: linear-gradient(135deg, #25d366, #128c7e);
+}
+
+.floating-button.instagram {
+  background: linear-gradient(135deg, #fd1d1d, #833ab4 50%, #fcb045);
 }
 
 .support-card p,
@@ -546,5 +650,10 @@ button {
   .brand-lockup {
     flex-direction: column;
     align-items: flex-start;
+  }
+
+  .floating-contact-dock {
+    right: 0.75rem;
+    bottom: 0.75rem;
   }
 }

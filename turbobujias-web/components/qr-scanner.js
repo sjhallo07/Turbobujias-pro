@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useState } from "react";
 
 export default function QrScanner({ onDetected }) {
-  const regionId = useMemo(() => `scanner-${Math.random().toString(36).slice(2, 9)}`, []);
+  const regionId = useId().replace(/:/g, "");
   const [isActive, setIsActive] = useState(false);
   const [lastResult, setLastResult] = useState("");
   const [error, setError] = useState("");
