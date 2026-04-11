@@ -172,7 +172,6 @@ function useThemePreference() {
       }
     } catch (error) {
       console.warn("No se pudo leer tb-theme-mode desde localStorage.", error);
-      return;
     }
   }, []);
 
@@ -196,7 +195,6 @@ function useThemePreference() {
       window.localStorage.setItem("tb-theme-mode", themeMode);
     } catch (error) {
       console.warn("No se pudo guardar tb-theme-mode en localStorage.", error);
-      return;
     }
   }, [themeMode]);
 
