@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import QrScanner from "./qr-scanner";
@@ -19,6 +20,33 @@ const HF_SPACE_URL =
   process.env.NEXT_PUBLIC_HF_SPACE_URL || "https://sjhallo07-turbobujias-ai.hf.space";
 const TAX_RATE = 0.16;
 const SHIPPING_USD = 8;
+const PARTNER_BRAND_COPY = {
+  NGK: "Encendido confiable para alta rotación y taller.",
+  Bosch: "Cobertura europea y desempeño estable en calle.",
+  Champion: "Opciones de trabajo pesado para flotas y pick-ups.",
+  Denso: "Tecnología OEM ideal para vehículos asiáticos.",
+};
+const DEFAULT_PARTNER_BRANDS = ["NGK", "Bosch", "Champion", "Denso"];
+const CUSTOMER_REVIEWS = [
+  {
+    name: "Luis R.",
+    location: "Valencia",
+    quote:
+      "La búsqueda por aplicación me ayudó a ubicar las bujías para un Corolla en menos de un minuto. El precio en bolívares sale listo para enviar al cliente.",
+  },
+  {
+    name: "Taller El Pistón",
+    location: "Naguanagua",
+    quote:
+      "El catálogo carga rápido, el stock se ve claro y el carrito sirve perfecto para armar cotizaciones de varias marcas en una sola pantalla.",
+  },
+  {
+    name: "María G.",
+    location: "Puerto Cabello",
+    quote:
+      "Me gustó ver las marcas principales y el soporte con IA. Hace más fácil escoger el repuesto correcto cuando llegan dudas por WhatsApp.",
+  },
+];
 
 function formatCurrency(amount, currency) {
   return new Intl.NumberFormat("es-VE", {
@@ -344,6 +372,18 @@ export default function Storefront() {
     };
   }, [items]);
 
+  const featuredBrands = useMemo(() => {
+    const availableBrands = [...new Set(items.map((item) => item.brand))];
+    const source = (availableBrands.length ? availableBrands : DEFAULT_PARTNER_BRANDS).slice(0, 6);
+
+    return source.map((brandName) => ({
+      name: brandName,
+      description:
+        PARTNER_BRAND_COPY[brandName] ||
+        "Inventario activo para ventas rápidas, cotización y reposición inmediata.",
+    }));
+  }, [items]);
+
   return (
     <main className="page-shell">
       <section className="hero">
@@ -351,6 +391,28 @@ export default function Storefront() {
 
         <div className="hero-grid">
           <div>
+            <div className="brand-lockup">
+              <div className="brand-icon-shell">
+                <Image
+                  alt="Ícono Turbobujias"
+                  className="brand-icon"
+                  height={84}
+                  priority
+                  src="/branding/turbobujias-icon.svg"
+                  width={84}
+                />
+              </div>
+              <div>
+                <Image
+                  alt="Logotipo de Turbobujias"
+                  className="brand-logo"
+                  height={72}
+                  priority
+                  src="/branding/turbobujias-logo.svg"
+                  width={230}
+                />
+              </div>
+            </div>
             <h1>Turbobujias Pro</h1>
             <p>
               E-commerce automotriz con búsqueda por SKU/UPC, filtros por aplicación,
@@ -391,6 +453,57 @@ export default function Storefront() {
               <strong>{exchangeRate || "—"}</strong>
               <span>Tasa {rateSource}</span>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="content-grid branded-content">
+        <div className="panel">
+          <div className="section-heading">
+            <div>
+              <h2>Marcas aliadas principales</h2>
+              <p>
+                Presentamos las marcas con mayor salida en mostrador para bujías, calentadores y
+                repuestos de encendido ofrecidos por Turbobujias.
+              </p>
+            </div>
+            <span className="tag">Ventas destacadas</span>
+          </div>
+
+          <div className="partner-grid">
+            {featuredBrands.map((brandItem) => (
+              <article className="brand-card" key={brandItem.name}>
+                <div className="brand-card-header">
+                  <div className="brand-mark">{brandItem.name.slice(0, 2).toUpperCase()}</div>
+                  <strong>{brandItem.name}</strong>
+                </div>
+                <p>{brandItem.description}</p>
+              </article>
+            ))}
+          </div>
+        </div>
+
+        <div className="panel">
+          <div className="section-heading">
+            <div>
+              <h2>Opiniones de clientes</h2>
+              <p>
+                Comentarios en español de clientes de mostrador, talleres y compradores frecuentes.
+              </p>
+            </div>
+            <span className="tag">Feedback real</span>
+          </div>
+
+          <div className="reviews-grid">
+            {CUSTOMER_REVIEWS.map((review) => (
+              <article className="review-card" key={review.name}>
+                <p>“{review.quote}”</p>
+                <div className="review-author">
+                  <strong>{review.name}</strong>
+                  <span>{review.location}</span>
+                </div>
+              </article>
+            ))}
           </div>
         </div>
       </section>

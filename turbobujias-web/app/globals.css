@@ -89,6 +89,29 @@ button {
   line-height: 1.05;
 }
 
+.brand-lockup {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.brand-icon-shell {
+  display: grid;
+  place-items: center;
+  width: 96px;
+  height: 96px;
+  border-radius: 28px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.brand-icon,
+.brand-logo {
+  width: auto;
+  height: auto;
+}
+
 .hero p,
 .muted,
 .empty-state p {
@@ -109,6 +132,10 @@ button {
 .hero-grid,
 .content-grid {
   grid-template-columns: 1.8fr 1fr;
+}
+
+.branded-content {
+  margin-bottom: 1.5rem;
 }
 
 .stats-grid {
@@ -140,6 +167,23 @@ button {
 .scanner-card,
 .cart-panel {
   padding: 1.25rem;
+}
+
+.section-heading,
+.brand-card-header,
+.review-author {
+  display: flex;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.section-heading {
+  align-items: flex-start;
+  margin-bottom: 1rem;
+}
+
+.section-heading p {
+  margin: 0.35rem 0 0;
 }
 
 .stat-card strong {
@@ -299,9 +343,54 @@ button {
 .applications-list,
 .cart-list,
 .summary-lines,
-.feature-list {
+.feature-list,
+.partner-grid,
+.reviews-grid {
   display: grid;
   gap: 0.6rem;
+}
+
+.partner-grid,
+.reviews-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.brand-card,
+.review-card {
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 20px;
+  padding: 1rem;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.brand-card p,
+.review-card p {
+  margin: 0.75rem 0 0;
+  color: var(--text-soft);
+}
+
+.brand-card-header,
+.review-author {
+  align-items: center;
+}
+
+.brand-mark {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 14px;
+  background: var(--accent-soft);
+  color: #dbe8ff;
+  font-weight: 700;
+}
+
+.review-author {
+  margin-top: 1rem;
+}
+
+.review-author span {
+  color: var(--text-soft);
 }
 
 .product-meta dl {
@@ -426,6 +515,11 @@ button {
   .filters-grid {
     grid-template-columns: 1fr;
   }
+
+  .section-heading,
+  .review-author {
+    flex-direction: column;
+  }
 }
 
 @media (max-width: 640px) {
@@ -447,5 +541,10 @@ button {
   .stats-grid,
   .product-meta dl {
     grid-template-columns: 1fr;
+  }
+
+  .brand-lockup {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
