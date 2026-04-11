@@ -4,12 +4,14 @@ emoji: 🔧
 colorFrom: blue
 colorTo: indigo
 sdk: gradio
+sdk_version: "4.44.1"
 app_file: app.py
 python_version: "3.10"
+suggested_hardware: cpu-basic
 short_description: RAG chatbot for diesel and spark plug compatibility queries.
 ---
 
-# Turbobujias AI Assistant
+## Turbobujias AI Assistant
 
 Gradio chatbot for diesel and spark plug compatibility questions in **Spanish and English**.
 
@@ -44,6 +46,37 @@ Otherwise they use:
 ### Common variable
 
 - `PORT` — defaults to `7860`
+
+## Deploy to Hugging Face Spaces
+
+1. Create a new **Gradio Space**.
+2. Upload the contents of `turbobujias-ai/` as the Space repository root.
+3. In **Settings → Variables and secrets**, add the secrets required by your chosen provider.
+4. Wait for the build to finish and open the Space URL.
+
+### Recommended secret set for this project
+
+If you want to use **GitHub Models** from inside the Space:
+
+- `LLM_PROVIDER=github`
+- `GITHUB_MODELS_TOKEN=...`
+- `GITHUB_MODELS_MODEL=openai/gpt-4.1`
+- `GITHUB_MODELS_ORG=` (optional)
+- `GITHUB_MODELS_API_VERSION=2026-03-10`
+
+If you want to use **Hugging Face Inference** instead:
+
+- `LLM_PROVIDER=huggingface`
+- `HF_TOKEN=...`
+- `HF_MODEL_REPO_ID=mistralai/Mistral-7B-Instruct-v0.2`
+
+The Space already includes the files Hugging Face expects:
+
+- `README.md` with Space metadata
+- `app.py` as the Gradio entrypoint
+- `requirements.txt` for Python packages
+- `packages.txt` for system packages (`ffmpeg`)
+- `inventory.json` for the retrieval knowledge base
 
 ## Included deployment files
 

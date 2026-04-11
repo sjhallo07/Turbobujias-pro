@@ -228,7 +228,15 @@ def answer_text(query: str, history: list) -> tuple[str, list, list]:
     """Process a text query and return (cleared_input, updated_chatbot, updated_state)."""
     if not query.strip():
         return "", history, history
-    answer, sources = answer_query(query)
+    try:
+        answer, sources = answer_query(query)
+    except Exception as exc:
+        answer = (
+            "Sorry, I couldn't complete the request right now. "
+            "Please try again in a moment and verify that the Space secrets are configured correctly.\n\n"
+            f"Technical detail: {exc}"
+        )
+        sources = []
     if sources:
         answer += f"\n\n*Sources: {', '.join(sources)}*"
     updated_history = history + [(query, answer)]
@@ -242,7 +250,20 @@ def answer_voice(audio_path: str | None, history: list) -> tuple[list, list]:
     """
     if audio_path is None:
         return history, history
-    transcription = whisper_model.transcribe(audio_path)["text"]
+    try:
+        transcription = whisper_model.transcribe(audio_path)["text"]
+    except Exception as exc:
+        error_message = (
+            "Sorry, I couldn't transcribe that audio right now. "
+            "Please try again with a shorter or clearer recording.\n\n"
+            f"Technical detail: {exc}"
+        )
+        updated_history = history + [(
+            "[voice input]",
+            error_message,
+        )]
+        return updated_history, updated_history
+
     _, updated_history, updated_state = answer_text(transcription, history)
     return updated_history, updated_state
 
