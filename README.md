@@ -6,7 +6,7 @@ Full-stack e-commerce & AI platform for **Diesel and Spark Plug** auto parts (Ve
 
 ## 🗂️ Project Structure
 
-```
+```text
 Turbobujias-pro/
 ├── backend/              # Node.js + Express API
 │   ├── data/
@@ -33,6 +33,115 @@ The platform supports product lookup by:
 The backend exposes a `/api/inventory/search?q=<UPC_or_SKU>` endpoint that queries
 `data/inventory.json` and returns brand, thread size, application, and price in both currencies.
 
+### Getting started with a barcode lookup API
+
+If you want to enrich the catalog with external barcode metadata, you can connect the project to a
+barcode lookup service that supports **EAN**, **GTIN**, and **UPC** queries.
+
+Typical use cases include:
+
+- looking up a single **13-digit EAN / GTIN**
+- looking up a **12-digit UPC**
+- searching products by **keyword or product name**
+- searching by **EAN prefix** to discover related products
+
+Replace the placeholder token in the examples below with your own API token before using them.
+
+#### Lookup an EAN barcode
+
+Use the barcode lookup operation and send the barcode in the `ean` parameter. For UPC codes, use
+`upc` instead.
+
+```bash
+curl "https://api.ean-search.org/api?token=YOUR_TOKEN&op=barcode-lookup&format=json&ean=5099750442227"
+```
+
+Example response:
+
+```json
+[
+  {
+    "ean": "5099750442227",
+    "name": "Michael Jackson, Thriller",
+    "categoryId": "15",
+    "categoryName": "Music",
+    "googleCategoryId": "855",
+    "issuingCountry": "UK"
+  }
+]
+```
+
+#### Search by product name
+
+Use a product search operation when you only know part of the item name. URL-encode spaces and
+special characters in the search text.
+
+```bash
+curl "https://api.ean-search.org/api?token=YOUR_TOKEN&op=product-search&format=json&name=Bananaboat"
+```
+
+Example response:
+
+```json
+{
+  "page": 0,
+  "moreproducts": false,
+  "totalproducts": 2,
+  "productlist": [
+    {
+      "ean": "0042286275123",
+      "name": "Stephan Remmler, Bananaboat",
+      "categoryId": "15",
+      "categoryName": "Music",
+      "issuingCountry": "US"
+    },
+    {
+      "ean": "4011222328366",
+      "name": "Harry Belafonte: Bananaboat",
+      "categoryId": "15",
+      "categoryName": "Music",
+      "issuingCountry": "DE"
+    }
+  ]
+}
+```
+
+#### Search by EAN prefix
+
+Prefix search is useful when a supplier or product family shares the same opening digits.
+
+```bash
+curl "https://api.ean-search.org/api?token=YOUR_TOKEN&op=barcode-prefix-search&format=json&prefix=0885909"
+```
+
+Example response:
+
+```json
+{
+  "page": 0,
+  "moreproducts": true,
+  "productlist": [
+    {
+      "ean": "0885909000173",
+      "name": "Apple iPhone 4 8GB Svart Telenor",
+      "categoryId": "25",
+      "categoryName": "Electronics",
+      "issuingCountry": "US"
+    },
+    {
+      "ean": "0885909000180",
+      "name": "Apple iPhone 4 8GB Vit Telenor",
+      "categoryId": "25",
+      "categoryName": "Electronics",
+      "issuingCountry": "US"
+    }
+  ]
+}
+```
+
+This external lookup flow can complement the local `/api/inventory/search` endpoint when the
+project needs broader barcode coverage beyond the catalog stored in `inventory.json`.
+
 ---
 
 ## 🤖 Smart AI Chatbot (Diesel / Spark Plugs)
@@ -40,7 +149,7 @@ The backend exposes a `/api/inventory/search?q=<UPC_or_SKU>` endpoint that queri
 Powered by [Hugging Face Spaces](https://huggingface.co/spaces) using:
 
 | Component | Technology |
-|---|---|
+| --- | --- |
 | Embedding model | `sentence-transformers/all-MiniLM-L6-v2` |
 | LLM | `mistralai/Mistral-7B-Instruct-v0.2` (via HuggingFaceHub) |
 | Vector store | `faiss-cpu` |
@@ -125,7 +234,7 @@ NEXT_PUBLIC_BINANCE_PAY_URL=https://pay.binance.com/
 ## 🚀 Deployment
 
 | Service | Platform |
-|---|---|
+| --- | --- |
 | Backend API | Render / Railway (via GitHub Actions) |
 | AI Chatbot | Hugging Face Spaces |
 | Frontend | Vercel |
