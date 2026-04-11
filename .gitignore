@@ -90,3 +90,7 @@ htmlcov/
 *.coverage
 *.coveragexml
 TestResult.xml
+
+# Allow tracked frontend source modules under turbobujias-web/lib
+!/turbobujias-web/lib/
+!/turbobujias-web/lib/**
