@@ -28,6 +28,7 @@ const BINANCE_PAY_URL =
   process.env.NEXT_PUBLIC_BINANCE_PAY_URL || "https://pay.binance.com/";
 const TAX_RATE = 0.16;
 const SHIPPING_USD = 8;
+const VALID_THEME_VALUES = ["system", "light", "dark"];
 const THEME_OPTIONS = [
   { value: "system", label: "Sistema" },
   { value: "light", label: "Claro" },
@@ -167,7 +168,7 @@ function useThemePreference() {
   useEffect(() => {
     try {
       const storedTheme = window.localStorage.getItem("tb-theme-mode");
-      if (storedTheme && THEME_OPTIONS.some((option) => option.value === storedTheme)) {
+      if (storedTheme && VALID_THEME_VALUES.includes(storedTheme)) {
         setThemeMode(storedTheme);
       }
     } catch (error) {
