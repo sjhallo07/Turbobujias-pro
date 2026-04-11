@@ -102,6 +102,24 @@ npm install
 npm run dev
 ```
 
+### Frontend environment variables
+
+Use `.env.local` inside `turbobujias-web/` to switch between localhost, local network, and public production URLs:
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:3001/api
+NEXT_PUBLIC_HF_SPACE_URL=https://sjhallo07-turbobujias-ai.hf.space
+NEXT_PUBLIC_WHATSAPP_URL=https://api.whatsapp.com/send
+NEXT_PUBLIC_INSTAGRAM_URL=https://www.instagram.com/turbobujiaspro/
+NEXT_PUBLIC_MERCADOLIBRE_URL=https://www.mercadolibre.com.ve/
+NEXT_PUBLIC_PAYPAL_URL=https://www.paypal.com/
+NEXT_PUBLIC_BINANCE_PAY_URL=https://pay.binance.com/
+```
+
+- **Local backend on same machine:** `NEXT_PUBLIC_API_URL=http://localhost:3001/api`
+- **Android/iOS testing on the same Wi-Fi:** use the LAN IP of the backend host, for example `http://192.168.1.25:3001/api`
+- **Production:** replace `NEXT_PUBLIC_API_URL` with the public backend URL and point the contact/payment URLs to live business accounts
+
 ---
 
 ## 🚀 Deployment
@@ -114,6 +132,10 @@ npm run dev
 
 GitHub Actions workflow (`.github/workflows/deploy-backend.yml`) auto-deploys
 the backend on every push to `main`.
+
+For mobile use, the storefront is a responsive web app that works in Android and iOS browsers once the backend URL is reachable from the device.
+
+The chatbot can stay on Hugging Face Spaces and be opened from the storefront in a separate browser tab/window.
 
 ---
 
