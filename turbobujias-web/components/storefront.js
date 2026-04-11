@@ -82,9 +82,14 @@ function buildWhatsAppUrl(message) {
     const url = new URL(WHATSAPP_URL);
     url.searchParams.set("text", message);
     return url.toString();
-  } catch {
+  } catch (error) {
+    console.warn("URL de WhatsApp inválida, usando el fallback estándar.", error);
     return `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
   }
+}
+
+function convertLineTotal(lineTotal, currencyCode, exchangeRate) {
+  return currencyCode === "VES" ? lineTotal * exchangeRate : lineTotal;
 }
 
 function buildCheckoutMessage({ items, currencyCode, exchangeRate, subtotalDisplay, totalDisplay }) {
@@ -95,7 +100,7 @@ function buildCheckoutMessage({ items, currencyCode, exchangeRate, subtotalDispl
   const lines = items.map(
     (item) =>
       `• ${item.quantity} x ${item.brand} ${item.model} (${item.sku}) = ${formatCurrency(
-        currencyCode === "VES" ? item.lineTotal * exchangeRate : item.lineTotal,
+        convertLineTotal(item.lineTotal, currencyCode, exchangeRate),
         currencyCode
       )}`
   );
@@ -160,9 +165,13 @@ function useThemePreference() {
   const [themeMode, setThemeMode] = useState("system");
 
   useEffect(() => {
-    const storedTheme = window.localStorage.getItem("tb-theme-mode");
-    if (storedTheme && THEME_OPTIONS.some((option) => option.value === storedTheme)) {
-      setThemeMode(storedTheme);
+    try {
+      const storedTheme = window.localStorage.getItem("tb-theme-mode");
+      if (storedTheme && THEME_OPTIONS.some((option) => option.value === storedTheme)) {
+        setThemeMode(storedTheme);
+      }
+    } catch {
+      return;
     }
   }, []);
 
@@ -177,9 +186,16 @@ function useThemePreference() {
 
     applyTheme();
     media.addEventListener("change", applyTheme);
-    window.localStorage.setItem("tb-theme-mode", themeMode);
 
     return () => media.removeEventListener("change", applyTheme);
+  }, [themeMode]);
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem("tb-theme-mode", themeMode);
+    } catch {
+      return;
+    }
   }, [themeMode]);
 
   return { themeMode, setThemeMode };
@@ -303,10 +319,7 @@ function CartPanel({ currencyMode, exchangeRate }) {
         <>
           <div className="cart-list">
             {items.map((item) => {
-              const lineTotal =
-                currencyMode === "VES"
-                  ? item.lineTotal * exchangeRate
-                  : item.lineTotal;
+              const lineTotal = convertLineTotal(item.lineTotal, currencyCode, exchangeRate);
 
               return (
                 <div className="cart-item" key={item.sku}>

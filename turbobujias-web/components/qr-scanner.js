@@ -3,6 +3,7 @@
 import { useEffect, useId, useState } from "react";
 
 export default function QrScanner({ onDetected }) {
+  // React useId() is SSR-safe; we strip ":" so the scanner library receives a plain DOM id.
   const regionId = useId().replace(/:/g, "");
   const [isActive, setIsActive] = useState(false);
   const [lastResult, setLastResult] = useState("");
