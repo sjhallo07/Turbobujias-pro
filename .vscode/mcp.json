@@ -1,0 +1,44 @@
+{
+	"servers": {
+		"hf-mcp-server": {
+			"type": "http",
+			"url": "https://huggingface.co/mcp?login&mix=proxy",
+			"headers": {
+				"Authorization": "Bearer ${input:hfToken}"
+			}
+		},
+		"hf-mcp-server-bouquet": {
+			"type": "http",
+			"url": "https://huggingface.co/mcp?login&bouquet=proxy",
+			"headers": {
+				"Authorization": "Bearer ${input:hfToken}"
+			}
+		},
+		"io.github.github/github-mcp-server": {
+			"type": "stdio",
+			"command": "docker",
+			"args": [
+				"run",
+				"-i",
+				"--rm",
+				"-e",
+				"GITHUB_PERSONAL_ACCESS_TOKEN=${input:token}",
+				"ghcr.io/github/github-mcp-server:0.33.0"
+			]
+		}
+	},
+	"inputs": [
+		{
+			"id": "hfToken",
+			"type": "promptString",
+			"description": "Hugging Face token for MCP authentication",
+			"password": true
+		},
+		{
+			"id": "token",
+			"type": "promptString",
+			"description": "",
+			"password": true
+		}
+	]
+}

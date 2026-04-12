@@ -1,5 +1,11 @@
 {
     "mcpServers": {
+        "huggingface": {
+            "url": "https://huggingface.co/mcp?login&mix=proxy",
+            "headers": {
+                "Authorization": "Bearer ${HF_TOKEN}"
+            }
+        },
         "github": {
             "command": "docker",
             "args": [

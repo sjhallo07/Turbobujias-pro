@@ -38,6 +38,16 @@
                 "copilotcli/gpt-5.4-mini",
                 "copilot/gpt-5.4-mini"
             ]
+        },
+        "Turbobujias-pro/.vscode/mcp.json: hf-mcp-server-bouquet": {
+            "allowedModels": [
+                "copilotcli/gpt-5.3-codex",
+                "copilot/gpt-5.3-codex",
+                "copilotcli/gpt-5.4",
+                "copilot/gpt-5.4",
+                "copilotcli/gpt-5.4-mini",
+                "copilot/gpt-5.4-mini"
+            ]
         }
     },
     "workbench.editor.alwaysShowEditorActions": true,
