@@ -54,7 +54,8 @@ a {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -235,7 +236,8 @@ button {
 }
 
 .field-group input,
-.field-group select {
+.field-group select,
+.field-group textarea {
   width: 100%;
   padding: 0.85rem 1rem;
   color: var(--text);
@@ -244,6 +246,10 @@ button {
   border-radius: 14px;
 }
 
+.field-group textarea {
+  resize: vertical;
+  min-height: 110px;
+}
 .filters-grid {
   margin-top: 1rem;
 }
@@ -613,6 +619,80 @@ button {
   color: var(--text-soft);
 }
 
+.ai-chatbot-panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.ai-chatbot-heading {
+  margin-bottom: 0;
+}
+
+.ai-chatbot-shell {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(280px, 0.9fr);
+  gap: 1rem;
+}
+
+.ai-chatbot-messages {
+  display: grid;
+  gap: 0.85rem;
+  max-height: 520px;
+  overflow-y: auto;
+  padding-right: 0.35rem;
+}
+
+.ai-chatbot-message {
+  padding: 1rem 1.1rem;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-soft) 76%, transparent);
+}
+
+.ai-chatbot-message.user {
+  background: linear-gradient(135deg, rgba(0, 85, 255, 0.16), rgba(44, 125, 255, 0.08));
+}
+
+.ai-chatbot-message.assistant {
+  background: color-mix(in srgb, var(--surface-soft) 80%, transparent);
+}
+
+.ai-chatbot-message p,
+.ai-chatbot-card p {
+  margin: 0.45rem 0 0;
+  color: var(--text-soft);
+  white-space: pre-wrap;
+}
+
+.ai-chatbot-role {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: var(--text);
+}
+
+.ai-chatbot-sources,
+.ai-chatbot-prompts,
+.ai-chatbot-sidecar {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.ai-chatbot-prompts {
+  align-content: start;
+}
+
+.ai-chatbot-card {
+  height: fit-content;
+}
+
+.ai-chatbot-form {
+  display: grid;
+  gap: 0.9rem;
+}
+
+.ai-chatbot-error {
+  color: var(--danger) !important;
+}
 @media (max-width: 960px) {
   .hero-grid,
   .content-grid,
@@ -625,6 +705,9 @@ button {
   .review-author {
     flex-direction: column;
   }
+.ai-chatbot-shell {
+  grid-template-columns: 1fr;
+}
 }
 
 @media (max-width: 640px) {

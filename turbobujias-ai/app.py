@@ -224,6 +224,76 @@ def answer_query(query: str) -> tuple[str, list[str]]:
     return answer, sources
 
 
+def serialize_history(history: list[tuple[str, str]]) -> list[dict[str, str]]:
+    """Convert Gradio chat history tuples into a JSON-safe structure."""
+    serialized = []
+    for user_message, assistant_message in history:
+      serialized.append(
+          {
+              "user": str(user_message),
+              "assistant": str(assistant_message),
+          }
+      )
+    return serialized
+
+
+def normalize_history(history: list[dict[str, str]] | None) -> list[tuple[str, str]]:
+    """Convert API history objects into the tuple format used by Gradio Chatbot."""
+    if not history:
+        return []
+
+    normalized = []
+    for item in history:
+        if not isinstance(item, dict):
+            continue
+
+        user_message = str(item.get("user", "")).strip()
+        assistant_message = str(item.get("assistant", "")).strip()
+        if not user_message and not assistant_message:
+            continue
+
+        normalized.append((user_message, assistant_message))
+
+    return normalized
+
+
+def chat_api(message: str, history: list[dict[str, str]] | None = None) -> dict[str, object]:
+    """Chat endpoint for web clients that need structured responses.
+
+    Args:
+        message: User message in Spanish or English.
+        history: Previous conversation messages as objects with user and assistant keys.
+
+    Returns:
+        A JSON-safe payload containing the assistant reply, cited source SKUs, and updated history.
+    """
+    current_history = normalize_history(history)
+
+    if not message.strip():
+        return {
+            "reply": "",
+            "sources": [],
+            "history": serialize_history(current_history),
+        }
+
+    try:
+        answer, sources = answer_query(message)
+    except Exception as exc:
+        answer = (
+            "Sorry, I couldn't complete the request right now. "
+            "Please try again in a moment and verify that the Space secrets are configured correctly.\n\n"
+            f"Technical detail: {exc}"
+        )
+        sources = []
+
+    updated_history = current_history + [(message, answer)]
+    return {
+        "reply": answer,
+        "sources": sources,
+        "history": serialize_history(updated_history),
+    }
+
+
 def answer_text(query: str, history: list) -> tuple[str, list, list]:
     """Process a text query and return (cleared_input, updated_chatbot, updated_state)."""
     if not query.strip():
@@ -272,6 +342,8 @@ def answer_voice(audio_path: str | None, history: list) -> tuple[list, list]:
 # 6. Gradio UI
 # ─────────────────────────────────────────────
 with gr.Blocks(title="Turbobujias AI Assistant", theme=gr.themes.Soft()) as demo:
+    gr.api(chat_api, api_name="chat")
+
     gr.Markdown(
         """
         # 🔧 Turbobujias AI Assistant

@@ -3,6 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
+import AiChatbot from "./ai-chatbot";
 import QrScanner from "./qr-scanner";
 import {
   addToCart,
@@ -202,7 +203,7 @@ function useThemePreference() {
   return { themeMode, setThemeMode };
 }
 
-function InventoryCard({ item, currencyMode, onAdd }) {
+function InventoryCard({ item, currencyMode, onAdd, onConsult }) {
   return (
     <article className="product-card">
       <div className="product-card-header">
@@ -269,7 +270,7 @@ function InventoryCard({ item, currencyMode, onAdd }) {
           </button>
           <button
             className="button-secondary"
-            onClick={() => window.open(`${HF_SPACE_URL}`, "_blank", "noopener,noreferrer")}
+            onClick={() => onConsult(item)}
             type="button"
           >
             Consultar con IA
@@ -457,6 +458,24 @@ export default function Storefront() {
   const [category, setCategory] = useState("all");
   const [vehicle, setVehicle] = useState("");
   const [currencyMode, setCurrencyMode] = useState("USD");
+
+  function scrollToChatbot() {
+    document.getElementById("ai-chatbot-section")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  function handleConsultWithAI(selectedItem) {
+    scrollToChatbot();
+    if (!selectedItem) {
+      return;
+    }
+
+    const prompt = `Necesito confirmar compatibilidad para ${selectedItem.brand} ${selectedItem.model} (${selectedItem.sku}) con aplicaciones ${selectedItem.application.join(", ")}.`;
+    window.dispatchEvent(new CustomEvent("tb-ai-prefill", { detail: { prompt } }));
+  }
+
   const floatingWhatsAppUrl = buildWhatsAppUrl(
     "Hola, necesito ayuda con catálogo, pagos o disponibilidad en Turbobujias Pro."
   );
@@ -581,9 +600,9 @@ export default function Storefront() {
               >
                 Ver en VES
               </button>
-              <a className="button-secondary" href={HF_SPACE_URL} rel="noreferrer" target="_blank">
+                <button className="button-secondary" onClick={scrollToChatbot} type="button">
                 Abrir chatbot IA
-              </a>
+                </button>
             </div>
 
             <div className="theme-toolbar">
@@ -819,6 +838,10 @@ export default function Storefront() {
         </section>
 
         <section style={{ marginTop: "1.5rem" }}>
+          <AiChatbot />
+        </section>
+
+        <section style={{ marginTop: "1.5rem" }}>
         <div className="panel">
           <h2>Catálogo disponible</h2>
           <p>
@@ -845,6 +868,7 @@ export default function Storefront() {
                   item={item}
                   key={item.sku}
                   onAdd={(selectedItem) => dispatch(addToCart(selectedItem))}
+                  onConsult={handleConsultWithAI}
                 />
               ))}
             </div>

@@ -1,0 +1,4 @@
+{
+    "chat.tools.terminal.backgroundNotifications": true,
+    "workbench.browser.enableChatTools": true
+}

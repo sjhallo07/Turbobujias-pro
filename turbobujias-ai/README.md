@@ -81,6 +81,7 @@ The Space already includes the files Hugging Face expects:
 ## Included deployment files
 
 - `app.py` — Gradio entrypoint
+- `mcp_http_client.py` — lightweight CLI client for remote MCP servers such as the Gradio Docs MCP Space
 - `requirements.txt` — Python dependencies
 - `packages.txt` — system packages required by Whisper
 - `inventory.json` — retrieval data source for product answers
@@ -92,3 +93,119 @@ The Space already includes the files Hugging Face expects:
 3. Start the app with `python app.py`
 
 The app will bind to `0.0.0.0` and use `PORT` when provided by the platform.
+
+## Chat API for the React storefront
+
+The Space now exposes a structured API endpoint named `/chat` for frontend clients.
+
+It accepts:
+
+- `message` — user text
+- `history` — previous conversation entries in the form:
+
+```json
+[
+ {
+  "user": "¿Qué bujía sirve para un Corolla 2014?",
+  "assistant": "..."
+ }
+]
+```
+
+It returns a JSON payload with:
+
+- `reply`
+- `sources`
+- `history`
+
+This endpoint is designed for the embedded React chatbot in `turbobujias-web`.
+
+## Spaces as API endpoints
+
+Every public Gradio Space on Hugging Face can be consumed as an API. For this project, the deployed Space URL is expected to be:
+
+- `https://sjhallo07-turbobujias-ai.hf.space`
+
+Useful API URLs for this project:
+
+- Space root: `https://sjhallo07-turbobujias-ai.hf.space`
+- OpenAPI spec: `https://sjhallo07-turbobujias-ai.hf.space/gradio_api/openapi.json`
+- Queue submit endpoint for `/chat`: `https://sjhallo07-turbobujias-ai.hf.space/gradio_api/call/chat`
+- Queue result endpoint template: `https://sjhallo07-turbobujias-ai.hf.space/gradio_api/call/chat/{event_id}`
+- Local metadata proxy from the Next.js app: `/api/ai-chat`
+- Local OpenAPI proxy from the Next.js app: `/api/ai-chat/openapi`
+
+### Inspect available endpoints
+
+You can inspect the Space API in several ways:
+
+- Click **Use via API** in the Space footer.
+- Open the OpenAPI document directly.
+- Query the local Next.js proxy route `GET /api/ai-chat`, which returns the current Space endpoint metadata and `view_api()` output.
+
+### Python client example
+
+```python
+from gradio_client import Client
+
+client = Client("sjhallo07/turbobujias-ai", token="hf_...")
+result = client.predict(
+        message="¿Qué bujía sirve para un Corolla 2014 1.8?",
+        history=[],
+        api_name="/chat",
+)
+print(result)
+```
+
+### JavaScript client example
+
+```javascript
+import { client } from "@gradio/client";
+
+const app = await client("https://sjhallo07-turbobujias-ai.hf.space");
+const result = await app.predict("/chat", {
+    message: "Necesito un calentador para Hilux 2.5 diesel 2012.",
+    history: []
+});
+
+console.log(result.data);
+```
+
+### REST queue example with curl
+
+Submit a request:
+
+```bash
+curl -X POST "https://sjhallo07-turbobujias-ai.hf.space/gradio_api/call/chat" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $HF_TOKEN" \
+    -d '{"data": [{"message": "Compare NGK y Bosch para un Civic 1.6 1998.", "history": []}]}'
+```
+
+Then read the result stream with the returned `event_id`:
+
+```bash
+curl -N "https://sjhallo07-turbobujias-ai.hf.space/gradio_api/call/chat/<event_id>" \
+    -H "Authorization: Bearer $HF_TOKEN"
+```
+
+### Free tier and rate limits
+
+- Public Spaces can be called without authentication, but a Hugging Face token typically gives better rate limits and is required for private Spaces.
+- This project is configured for `cpu-basic`, not ZeroGPU.
+- If you later migrate the Space to **ZeroGPU**, Hugging Face free/pro quotas apply to GPU usage. Those quotas are separate from the current CPU-based deployment described in this repository.
+
+## MCP client for Gradio and Hugging Face development
+
+Use `mcp_http_client.py` to connect to remote MCP servers over Streamable HTTP.
+
+Examples:
+
+- `python mcp_http_client.py --list-tools`
+- `python mcp_http_client.py --search "gradio chatbot blocks state"`
+- `python mcp_http_client.py --load-docs`
+- `python mcp_http_client.py --call docs_mcp_search_gradio_docs --arguments '{"query":"hugging face spaces auth"}'`
+
+By default it connects to the official Gradio Docs MCP server:
+
+- `https://gradio-docs-mcp.hf.space/gradio_api/mcp/`
