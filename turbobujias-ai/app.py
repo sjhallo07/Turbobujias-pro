@@ -124,7 +124,17 @@ def load_inventory() -> list[Document]:
             f"Price USD: ${item['price_usd']} | "
             f"Applications: {applications}"
         )
-        docs.append(Document(page_content=text, metadata={"sku": item["sku"]}))
+        docs.append(
+            Document(
+                page_content=text,
+                metadata={
+                    "sku": item["sku"],
+                    "upc": str(item.get("upc", "")).strip(),
+                    "brand": item.get("brand", ""),
+                    "model": item.get("model", ""),
+                },
+            )
+        )
     return docs
 
 
@@ -132,6 +142,50 @@ def extract_doc_field(doc: Document, field_name: str) -> str:
     pattern = rf"{field_name}:\s*([^|]+)"
     match = re.search(pattern, doc.page_content)
     return match.group(1).strip() if match else ""
+
+
+def find_exact_catalog_matches(query: str) -> list[Document]:
+    normalized = query.casefold()
+    digit_tokens = set(re.findall(r"\b\d{8,14}\b", query))
+    sku_candidates = set(re.findall(r"\b[A-Z0-9]+(?:-[A-Z0-9]+)+\b", query.upper()))
+
+    matches: list[Document] = []
+    seen: set[str] = set()
+
+    for doc in documents:
+        sku = str(doc.metadata.get("sku", "")).strip()
+        upc = str(doc.metadata.get("upc", "")).strip()
+        sku_upper = sku.upper()
+
+        is_match = False
+        if sku and sku_upper in sku_candidates:
+            is_match = True
+        elif upc and upc in digit_tokens:
+            is_match = True
+        elif sku and sku.casefold() in normalized:
+            is_match = True
+
+        if is_match and sku not in seen:
+            seen.add(sku)
+            matches.append(doc)
+
+    return matches
+
+
+def get_relevant_docs(query: str) -> list[Document]:
+    exact_docs = find_exact_catalog_matches(query)
+    semantic_docs = retriever.invoke(query)
+    merged: list[Document] = []
+    seen: set[str] = set()
+
+    for doc in [*exact_docs, *semantic_docs]:
+        sku = str(doc.metadata.get("sku", "")).strip() or doc.page_content
+        if sku in seen:
+            continue
+        seen.add(sku)
+        merged.append(doc)
+
+    return merged[:4]
 
 
 def collect_source_skus(query: str, answer: str, docs: list[Document]) -> list[str]:
@@ -174,6 +228,77 @@ def collect_source_skus(query: str, answer: str, docs: list[Document]) -> list[s
     ranked.sort(reverse=True)
     ordered = [sku for _score, _index, sku in ranked]
     return ordered[:3]
+
+
+def is_exact_lookup_query(query: str) -> bool:
+    lowered = query.casefold()
+    return (
+        "sku" in lowered
+        or "upc" in lowered
+        or "ean" in lowered
+        or bool(re.search(r"\b\d{8,14}\b", query))
+    )
+
+
+def build_exact_lookup_answer(doc: Document) -> str:
+    sku = str(doc.metadata.get("sku", "")).strip()
+    upc = str(doc.metadata.get("upc", "")).strip()
+    brand = extract_doc_field(doc, "Brand")
+    model = extract_doc_field(doc, "Model")
+    part_type = extract_doc_field(doc, "Type")
+    thread = extract_doc_field(doc, "Thread")
+    gap = extract_doc_field(doc, "Gap")
+    electrode = extract_doc_field(doc, "Electrode")
+    price = extract_doc_field(doc, "Price USD")
+    applications = extract_doc_field(doc, "Applications")
+
+    application_lines = []
+    if applications:
+        application_lines = [
+            f"  - {application.strip()}"
+            for application in applications.split(";")
+            if application.strip()
+        ]
+
+    answer_lines = [
+        f"El producto que corresponde a **{sku}** es:",
+        "",
+        f"- **Marca:** {brand}",
+        f"- **Modelo:** {model}",
+        f"- **UPC:** {upc or 'N/A'}",
+        f"- **Tipo:** {part_type or 'N/A'}",
+        f"- **Rosca:** {thread or 'N/A'}",
+        f"- **Separación:** {gap or 'N/A'}",
+        f"- **Electrodo:** {electrode or 'N/A'}",
+        f"- **Precio:** {price or 'N/A'}",
+    ]
+
+    if application_lines:
+        answer_lines.extend(["- **Aplicaciones:**", *application_lines])
+
+    answer_lines.append("")
+    answer_lines.append(
+        "Si quieres, también puedo ayudarte a confirmar compatibilidad por marca, modelo, motor, combustible y año."
+    )
+
+    return "\n".join(answer_lines)
+
+
+def try_exact_lookup_answer(query: str, docs: list[Document]) -> tuple[str, list[str]] | None:
+    if not is_exact_lookup_query(query):
+        return None
+
+    if not docs:
+        return None
+
+    exact_doc = docs[0]
+    sku = str(exact_doc.metadata.get("sku", "")).strip()
+    if not sku:
+        return None
+
+    answer = build_exact_lookup_answer(exact_doc)
+    sources = [sku]
+    return answer, sources
 
 
 # ─────────────────────────────────────────────
@@ -228,7 +353,11 @@ def answer_with_github_models(
     query: str,
     history: list[tuple[str, str]] | None = None,
 ) -> tuple[str, list[str]]:
-    docs = retriever.invoke(query)
+    docs = get_relevant_docs(query)
+    exact_lookup = try_exact_lookup_answer(query, docs)
+    if exact_lookup is not None:
+        return exact_lookup
+
     context = "\n\n".join(doc.page_content for doc in docs)
     messages = [
         {
@@ -271,7 +400,11 @@ def answer_with_huggingface(
     query: str,
     history: list[tuple[str, str]] | None = None,
 ) -> tuple[str, list[str]]:
-    docs = retriever.invoke(query)
+    docs = get_relevant_docs(query)
+    exact_lookup = try_exact_lookup_answer(query, docs)
+    if exact_lookup is not None:
+        return exact_lookup
+
     context = "\n\n".join(doc.page_content for doc in docs)
 
     history_lines = []
