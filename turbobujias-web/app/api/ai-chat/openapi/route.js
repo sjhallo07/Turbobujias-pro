@@ -16,7 +16,7 @@ export async function GET() {
             headers.Authorization = `Bearer ${HF_TOKEN}`;
         }
 
-        const response = await fetch(`${SPACE_URL}/gradio_api/openapi.json`, {
+        const response = await fetch(`${SPACE_URL}/openapi.json`, {
             headers,
             cache: "no-store",
         });

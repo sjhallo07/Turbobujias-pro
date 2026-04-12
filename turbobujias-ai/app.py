@@ -13,16 +13,20 @@ import json
 import os
 import sys
 from pathlib import Path
+from typing import Any
 
 import gradio as gr
 import whisper
 from dotenv import load_dotenv
+from fastapi import FastAPI
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.llms import HuggingFaceHub
 from langchain_community.vectorstores import FAISS
 from openai import OpenAI
+from pydantic import BaseModel, Field
+import uvicorn
 
 APP_DIR = Path(__file__).parent
 load_dotenv(APP_DIR / ".env")
@@ -331,6 +335,47 @@ def chat_api(message: str, history: list[dict[str, str]] | None = None) -> dict[
     }
 
 
+class ChatTurn(BaseModel):
+    user: str = ""
+    assistant: str = ""
+
+
+class ChatRequest(BaseModel):
+    message: str = ""
+    history: list[ChatTurn] = Field(default_factory=list)
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    sources: list[str] = Field(default_factory=list)
+    history: list[ChatTurn] = Field(default_factory=list)
+
+
+api_app = FastAPI(
+    title="Turbobujias AI Assistant API",
+    description="Local REST API for the Turbobujias AI chatbot.",
+    version="1.0.0",
+)
+
+
+@api_app.get("/health")
+def healthcheck() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@api_app.post("/chat", response_model=ChatResponse)
+def chat_endpoint(payload: ChatRequest) -> ChatResponse:
+    result = chat_api(
+        payload.message,
+        history=[turn.model_dump() for turn in payload.history],
+    )
+    return ChatResponse(
+        reply=str(result.get("reply", "")),
+        sources=list(result.get("sources", [])),
+        history=[ChatTurn(**item) for item in result.get("history", []) if isinstance(item, dict)],
+    )
+
+
 def answer_text(query: str, history: list) -> tuple[str, list, list]:
     """Process a text query and return (cleared_input, updated_chatbot, updated_state)."""
     if not query.strip():
@@ -379,19 +424,6 @@ def answer_voice(audio_path: str | None, history: list) -> tuple[list, list]:
 # 6. Gradio UI
 # ─────────────────────────────────────────────
 with gr.Blocks(title="Turbobujias AI Assistant", theme=gr.themes.Soft()) as demo:
-    api_message = gr.Textbox(label="message", visible=False)
-    api_history = gr.JSON(label="history", visible=False)
-    api_response = gr.JSON(label="response", visible=False)
-    api_trigger = gr.Button("API chat trigger", visible=False)
-
-    api_trigger.click(
-        chat_api,
-        inputs=[api_message, api_history],
-        outputs=[api_response],
-        api_name="chat",
-        show_api=False,
-    )
-
     gr.Markdown(
         """
         # 🔧 Turbobujias AI Assistant
@@ -441,10 +473,14 @@ with gr.Blocks(title="Turbobujias AI Assistant", theme=gr.themes.Soft()) as demo
         "Data sourced from the Turbobujias3646 inventory*"
     )
 
+
+app = gr.mount_gradio_app(api_app, demo, path="/")
+
 if __name__ == "__main__":
-    demo.queue(default_concurrency_limit=2).launch(
-        server_name=os.environ.get("GRADIO_SERVER_NAME", "0.0.0.0"),
-        server_port=int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", "7860"))),
-        show_error=True,
+    demo.queue(default_concurrency_limit=2)
+    uvicorn.run(
+        app,
+        host=os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1"),
+        port=int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", "7860"))),
     )
 
