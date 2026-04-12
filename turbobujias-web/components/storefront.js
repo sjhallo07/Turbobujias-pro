@@ -493,10 +493,12 @@ export default function Storefront() {
     return items
       .filter((item) => {
         const applications = item.application.join(" ").toLowerCase();
+        const title = (item.title || "").toLowerCase();
         return (
           item.sku.toLowerCase().includes(normalizedQuery) ||
           item.upc.toLowerCase().includes(normalizedQuery) ||
           item.model.toLowerCase().includes(normalizedQuery) ||
+          title.includes(normalizedQuery) ||
           applications.includes(normalizedQuery)
         );
       })
@@ -508,12 +510,14 @@ export default function Storefront() {
     const normalizedVehicle = vehicle.trim().toLowerCase();
 
     return items.filter((item) => {
+      const title = (item.title || "").toLowerCase();
       const matchesQuery =
         normalizedQuery.length === 0 ||
         item.sku.toLowerCase().includes(normalizedQuery) ||
         item.upc.toLowerCase().includes(normalizedQuery) ||
         item.brand.toLowerCase().includes(normalizedQuery) ||
         item.model.toLowerCase().includes(normalizedQuery) ||
+        title.includes(normalizedQuery) ||
         item.application.join(" ").toLowerCase().includes(normalizedQuery);
 
       const matchesBrand = brand === "all" || item.brand === brand;

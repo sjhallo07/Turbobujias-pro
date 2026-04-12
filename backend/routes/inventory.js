@@ -81,7 +81,11 @@ router.get('/search', async (req, res) => {
     const matches = items.filter(
       (item) =>
         item.sku.toUpperCase().includes(query) ||
-        (item.upc && item.upc.includes(query))
+        (item.upc && item.upc.includes(query)) ||
+        item.brand.toUpperCase().includes(query) ||
+        item.model.toUpperCase().includes(query) ||
+        (item.title && item.title.toUpperCase().includes(query)) ||
+        item.application.join(' ').toUpperCase().includes(query)
     );
 
     if (matches.length === 0) {
