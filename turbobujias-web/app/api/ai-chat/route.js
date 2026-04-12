@@ -133,7 +133,10 @@ export async function POST(request) {
             data: result ?? null,
         });
     } catch (error) {
-        const rawMessage = error instanceof Error ? error.message : "";
+        const rawMessage = error instanceof Error ? error.message : String(error);
+        // Log the original error server-side so it remains visible in server logs
+        // without being sent to the browser.
+        console.error("[ai-chat] upstream error (hidden from client):", rawMessage);
         return NextResponse.json(
             {
                 error: sanitizeUpstreamError(rawMessage),

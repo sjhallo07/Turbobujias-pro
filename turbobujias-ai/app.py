@@ -66,9 +66,9 @@ def _is_rate_limit_or_provider_error(exc: Exception) -> bool:
 
 
 def _safe_llm_error_message(exc: Exception) -> str:
-    """Log the real error and return a user-friendly message that never exposes
-    raw provider error text, rate-limit details, or Terms-of-Service references."""
-    _log.warning("LLM provider error (hidden from user): %s", exc, exc_info=True)
+    """Log the real error server-side and return a user-friendly message that never
+    exposes raw provider error text, rate-limit details, or Terms-of-Service references."""
+    _log.warning("LLM error (hidden from chat UI): %s", exc, exc_info=True)
     if _is_rate_limit_or_provider_error(exc):
         return (
             "El asistente está recibiendo demasiadas solicitudes en este momento. "
@@ -442,15 +442,19 @@ whisper_model = whisper.load_model("base")
 def _call_github_models(messages: list[dict]) -> str:
     """Send *messages* to GitHub Models with automatic retry on rate-limit errors.
 
-    Makes up to 3 attempts, waiting _RETRY_WAIT_SECONDS[i] seconds before the
-    (i+1)-th retry. Re-raises immediately on any non-rate-limit exception.
+    Makes up to 3 attempts. The delays before each attempt are:
+      attempt 1: 0 s (immediate)
+      attempt 2: _RETRY_WAIT_SECONDS[0] s
+      attempt 3: _RETRY_WAIT_SECONDS[1] s
+    Re-raises immediately on any non-rate-limit exception.
     """
-    last_exc: Exception | None = None
-    waits = (0.0,) + _RETRY_WAIT_SECONDS  # [0, 1.5, 4.0] → 3 total attempts
-    for attempt, wait in enumerate(waits):
+    max_attempts = 1 + len(_RETRY_WAIT_SECONDS)  # 3
+    delays = (0.0,) + _RETRY_WAIT_SECONDS        # delay before each attempt
+    for attempt, wait in enumerate(delays):
         if wait:
-            _log.info("GitHub Models rate-limit, waiting %.1fs before retry %d…", wait, attempt)
+            _log.info("GitHub Models rate-limit; waiting %.1fs before attempt %d/%d…", wait, attempt + 1, max_attempts)
             time.sleep(wait)
+        is_last_attempt = attempt == max_attempts - 1
         try:
             response = github_client.chat.completions.create(  # type: ignore[union-attr]
                 messages=messages,
@@ -461,11 +465,11 @@ def _call_github_models(messages: list[dict]) -> str:
             )
             return (response.choices[0].message.content or "").strip()
         except Exception as exc:
-            last_exc = exc
-            if not _is_rate_limit_or_provider_error(exc) or attempt == len(waits) - 1:
+            if not _is_rate_limit_or_provider_error(exc) or is_last_attempt:
                 raise
-            _log.warning("GitHub Models rate-limit on attempt %d/%d", attempt + 1, len(waits))
-    raise last_exc  # type: ignore[misc]
+            _log.warning("GitHub Models rate-limit on attempt %d/%d, will retry…", attempt + 1, max_attempts)
+    # Unreachable: the loop always raises before exhausting all attempts without a return.
+    raise RuntimeError("_call_github_models: exhausted all retry attempts without a result or exception")
 
 
 def answer_with_github_models(
