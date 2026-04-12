@@ -31,29 +31,12 @@
         },
         "Turbobujias-pro/.vscode/mcp.json: hf-mcp-server": {
             "allowedModels": [
-                "copilot/auto",
-                "copilotcli/gpt-5.4",
-                "copilot/gemini-2.5-pro",
-                "copilot/gemini-3-flash-preview",
-                "copilot/gemini-3.1-pro-preview",
-                "copilotcli/gpt-4.1",
-                "copilot/gpt-4.1",
-                "copilot/gpt-4o",
-                "copilotcli/gpt-5-mini",
-                "copilot/gpt-5-mini",
-                "copilotcli/gpt-5.1",
-                "copilot/gpt-5.1",
-                "copilotcli/gpt-5.2",
-                "copilot/gpt-5.2",
-                "copilotcli/gpt-5.2-codex",
-                "copilot/gpt-5.2-codex",
                 "copilotcli/gpt-5.3-codex",
                 "copilot/gpt-5.3-codex",
+                "copilotcli/gpt-5.4",
                 "copilot/gpt-5.4",
                 "copilotcli/gpt-5.4-mini",
-                "copilot/gpt-5.4-mini",
-                "copilot/grok-code-fast-1",
-                "copilot/oswe-vscode-prime"
+                "copilot/gpt-5.4-mini"
             ]
         }
     },
@@ -63,5 +46,14 @@
         "mainThreadWebview-markdown.preview": true,
         "workbench.input.interactive": true,
         "java.formatterSettingsEditor": true
-    }
+    },
+    "problems.showCurrentInStatus": true,
+    "editor.formatOnSave": true,
+    "python.analysis.displayEnglishDiagnostics": true,
+    "python.analysis.autoTranslateDocstrings": true,
+    "python.analysis.autoImportCompletions": true,
+    "python.analysis.autoFormatStrings": true,
+    "python.analysis.enableTroubleshootMissingImports": true,
+    "python.analysis.extraCommitChars": true,
+    "python.analysis.generateWithTypeAnnotation": true
 }
