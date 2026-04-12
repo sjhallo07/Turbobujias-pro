@@ -11,6 +11,7 @@ Stack:
 
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -127,6 +128,54 @@ def load_inventory() -> list[Document]:
     return docs
 
 
+def extract_doc_field(doc: Document, field_name: str) -> str:
+    pattern = rf"{field_name}:\s*([^|]+)"
+    match = re.search(pattern, doc.page_content)
+    return match.group(1).strip() if match else ""
+
+
+def collect_source_skus(query: str, answer: str, docs: list[Document]) -> list[str]:
+    query_text = query.casefold()
+    answer_text = answer.casefold()
+    brand_match = re.search(r"\b(ngk|bosch|denso|champion|beru|motorcraft|acdelco|autolite)\b", query_text)
+    requested_brand = brand_match.group(1) if brand_match else ""
+
+    ranked: list[tuple[int, int, str]] = []
+    seen: set[str] = set()
+
+    for index, doc in enumerate(docs):
+        sku = str(doc.metadata.get("sku", "")).strip()
+        if not sku or sku in seen:
+            continue
+
+        seen.add(sku)
+        sku_text = sku.casefold()
+        brand = extract_doc_field(doc, "Brand").casefold()
+        model = extract_doc_field(doc, "Model").casefold()
+
+        score = 0
+        if sku_text in answer_text:
+            score += 100
+        if sku_text in query_text:
+            score += 60
+        if requested_brand and brand == requested_brand:
+            score += 40
+        if brand and brand in answer_text:
+            score += 25
+        if brand and brand in query_text:
+            score += 15
+        if model and model in answer_text:
+            score += 15
+        if model and model in query_text:
+            score += 10
+
+        ranked.append((score, -index, sku))
+
+    ranked.sort(reverse=True)
+    ordered = [sku for _score, _index, sku in ranked]
+    return ordered[:3]
+
+
 # ─────────────────────────────────────────────
 # 2. Build FAISS vector store
 # ─────────────────────────────────────────────
@@ -214,7 +263,7 @@ def answer_with_github_models(
     )
 
     answer = (response.choices[0].message.content or "").strip()
-    sources = [doc.metadata.get("sku", "?") for doc in docs]
+    sources = collect_source_skus(query, answer, docs)
     return answer, sources
 
 
@@ -251,7 +300,7 @@ def answer_with_huggingface(
     )
 
     answer = str(hf_llm.invoke(prompt)).strip()
-    sources = [doc.metadata.get("sku", "?") for doc in docs]
+    sources = collect_source_skus(query, answer, docs)
     return answer, sources
 
 
