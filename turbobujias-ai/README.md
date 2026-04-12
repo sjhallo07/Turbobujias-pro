@@ -98,6 +98,90 @@ The Space already includes the files Hugging Face expects:
 
 The app will bind to `0.0.0.0` and use `PORT` when provided by the platform.
 
+### Recommended Python environment for this repository
+
+Use a **dedicated Python virtual environment only for `turbobujias-ai/`**.
+
+Why:
+
+- `backend/` is a **Node.js + Express** service
+- `turbobujias-web/` is a **Next.js** service
+- only `turbobujias-ai/` needs Python, Torch, Whisper, FAISS, and LangChain
+
+That means you should **not** create one shared Python environment for the whole project.
+Keep Python isolated to the chatbot service and keep Node dependencies isolated to each Node app.
+
+### Recommended Python version
+
+For local development on Windows, prefer **Python 3.13** for the chatbot.
+
+- Python 3.14 may require more package compilation work depending on wheels available for your machine.
+- A dedicated Python 3.13 virtual environment is the safest option for `gradio`, `whisper`, and related ML packages in this repo.
+
+Example setup:
+
+```powershell
+cd turbobujias-ai
+py -3.13 -m venv .venv313
+.\.venv313\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
+.\.venv313\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv313\Scripts\python.exe app.py
+```
+
+### How the full project is split locally
+
+Run the services independently:
+
+#### Backend API
+
+```powershell
+cd backend
+npm install
+node server.js
+```
+
+Default URL:
+
+- `http://127.0.0.1:3001/api/health`
+
+#### Frontend
+
+```powershell
+cd turbobujias-web
+npm install
+npm run build
+npm run start
+```
+
+Default URL:
+
+- `http://127.0.0.1:3000`
+
+#### Chatbot
+
+```powershell
+cd turbobujias-ai
+.\.venv313\Scripts\python.exe app.py
+```
+
+Default URL:
+
+- `http://127.0.0.1:7860`
+
+### Database note
+
+There is **no separate database server to start** for the current project layout.
+
+- the backend uses `backend/data/inventory.json`
+- the chatbot uses `turbobujias-ai/inventory.json`
+
+So the local stack is currently:
+
+- Node backend
+- Next.js frontend
+- Python chatbot
+- JSON files as the catalog data source
+
 ### GitHub Models quick start
 
 To use the first chatbot option with GitHub Models, export your token as `GITHUB_TOKEN`.
