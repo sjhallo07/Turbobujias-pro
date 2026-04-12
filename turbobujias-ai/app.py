@@ -10,9 +10,11 @@ Stack:
 """
 
 import json
+import logging
 import os
 import re
 import sys
+import time
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +30,56 @@ from langchain_community.vectorstores import FAISS
 from openai import OpenAI
 from pydantic import BaseModel, Field
 import uvicorn
+
+logging.basicConfig(level=logging.INFO)
+_log = logging.getLogger(__name__)
+
+# ─────────────────────────────────────────────
+# Provider-error helpers
+# ─────────────────────────────────────────────
+# Keywords that indicate a provider-side rate-limit, policy, or quota error.
+# These are matched case-insensitively against the stringified exception.
+_RATE_LIMIT_INDICATORS: frozenset[str] = frozenset(
+    [
+        "rate limit",
+        "ratelimit",
+        "too many requests",
+        "429",
+        "terms of service",
+        "terms-of-service",
+        "scraping",
+        "github.com/site-policy",
+        "github terms",
+        "quota",
+        "exceeded",
+    ]
+)
+
+# Seconds to wait before the 2nd and 3rd attempts when GitHub Models is rate-limited.
+_RETRY_WAIT_SECONDS: tuple[float, float] = (1.5, 4.0)
+
+
+def _is_rate_limit_or_provider_error(exc: Exception) -> bool:
+    """Return True when *exc* looks like a provider rate-limit or policy error."""
+    msg = str(exc).lower()
+    return any(indicator in msg for indicator in _RATE_LIMIT_INDICATORS)
+
+
+def _safe_llm_error_message(exc: Exception) -> str:
+    """Log the real error and return a user-friendly message that never exposes
+    raw provider error text, rate-limit details, or Terms-of-Service references."""
+    _log.warning("LLM provider error (hidden from user): %s", exc, exc_info=True)
+    if _is_rate_limit_or_provider_error(exc):
+        return (
+            "El asistente está recibiendo demasiadas solicitudes en este momento. "
+            "Por favor, espera unos segundos e intenta de nuevo.\n"
+            "(The assistant is temporarily busy. Please wait a moment and try again.)"
+        )
+    return (
+        "Lo siento, no pude completar tu solicitud en este momento. "
+        "Por favor, intenta de nuevo en un momento.\n"
+        "(Sorry, I couldn't complete the request right now. Please try again in a moment.)"
+    )
 
 APP_DIR = Path(__file__).parent
 load_dotenv(APP_DIR / ".env")
@@ -387,6 +439,35 @@ whisper_model = whisper.load_model("base")
 # ─────────────────────────────────────────────
 # 5. Helper functions
 # ─────────────────────────────────────────────
+def _call_github_models(messages: list[dict]) -> str:
+    """Send *messages* to GitHub Models with automatic retry on rate-limit errors.
+
+    Makes up to 3 attempts, waiting _RETRY_WAIT_SECONDS[i] seconds before the
+    (i+1)-th retry. Re-raises immediately on any non-rate-limit exception.
+    """
+    last_exc: Exception | None = None
+    waits = (0.0,) + _RETRY_WAIT_SECONDS  # [0, 1.5, 4.0] → 3 total attempts
+    for attempt, wait in enumerate(waits):
+        if wait:
+            _log.info("GitHub Models rate-limit, waiting %.1fs before retry %d…", wait, attempt)
+            time.sleep(wait)
+        try:
+            response = github_client.chat.completions.create(  # type: ignore[union-attr]
+                messages=messages,
+                temperature=0.3,
+                top_p=1.0,
+                max_tokens=800,
+                model=GITHUB_MODELS_MODEL,
+            )
+            return (response.choices[0].message.content or "").strip()
+        except Exception as exc:
+            last_exc = exc
+            if not _is_rate_limit_or_provider_error(exc) or attempt == len(waits) - 1:
+                raise
+            _log.warning("GitHub Models rate-limit on attempt %d/%d", attempt + 1, len(waits))
+    raise last_exc  # type: ignore[misc]
+
+
 def answer_with_github_models(
     query: str,
     history: list[tuple[str, str]] | None = None,
@@ -421,15 +502,7 @@ def answer_with_github_models(
         }
     )
 
-    response = github_client.chat.completions.create(
-        messages=messages,
-        temperature=0.3,
-        top_p=1.0,
-        max_tokens=800,
-        model=GITHUB_MODELS_MODEL,
-    )
-
-    answer = (response.choices[0].message.content or "").strip()
+    answer = _call_github_models(messages)
     sources = collect_source_skus(query, answer, docs)
     return answer, sources
 
@@ -540,11 +613,7 @@ def chat_api(message: str, history: list[dict[str, str]] | None = None) -> dict[
     try:
         answer, sources = answer_query(message, current_history)
     except Exception as exc:
-        answer = (
-            "Sorry, I couldn't complete the request right now. "
-            "Please try again in a moment and verify that the Space secrets are configured correctly.\n\n"
-            f"Technical detail: {exc}"
-        )
+        answer = _safe_llm_error_message(exc)
         sources = []
 
     updated_history = current_history + [(message, answer)]
@@ -603,11 +672,7 @@ def answer_text(query: str, history: list) -> tuple[str, list, list]:
     try:
         answer, sources = answer_query(query, history)
     except Exception as exc:
-        answer = (
-            "Sorry, I couldn't complete the request right now. "
-            "Please try again in a moment and verify that the Space secrets are configured correctly.\n\n"
-            f"Technical detail: {exc}"
-        )
+        answer = _safe_llm_error_message(exc)
         sources = []
     if sources:
         answer += f"\n\n*Sources: {', '.join(sources)}*"
@@ -625,10 +690,12 @@ def answer_voice(audio_path: str | None, history: list) -> tuple[list, list]:
     try:
         transcription = whisper_model.transcribe(audio_path)["text"]
     except Exception as exc:
+        _log.warning("Whisper transcription error (hidden from user): %s", exc, exc_info=True)
         error_message = (
-            "Sorry, I couldn't transcribe that audio right now. "
-            "Please try again with a shorter or clearer recording.\n\n"
-            f"Technical detail: {exc}"
+            "Lo siento, no pude transcribir ese audio en este momento. "
+            "Por favor, intenta de nuevo con una grabación más corta o clara.\n"
+            "(Sorry, I couldn't transcribe that audio right now. "
+            "Please try again with a shorter or clearer recording.)"
         )
         updated_history = history + [(
             "[voice input]",

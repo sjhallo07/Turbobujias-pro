@@ -12,6 +12,35 @@ const CHAT_API_NAME =
 const HF_TOKEN = process.env.HF_TOKEN || "";
 const OPENAPI_PATH = "/openapi.json";
 
+/**
+ * Keywords that indicate a provider-level rate-limit or policy error.
+ * When any of these appear in the upstream error message the proxy replaces
+ * the raw text with a safe, user-friendly message so end users never see
+ * GitHub Terms-of-Service or scraping-policy wording.
+ */
+const RATE_LIMIT_INDICATORS = [
+    "rate limit",
+    "ratelimit",
+    "too many requests",
+    "429",
+    "terms of service",
+    "terms-of-service",
+    "scraping",
+    "github terms",
+    "quota",
+];
+
+function sanitizeUpstreamError(raw) {
+    const lower = typeof raw === "string" ? raw.toLowerCase() : "";
+    const isRateLimit = RATE_LIMIT_INDICATORS.some((kw) => lower.includes(kw));
+    if (isRateLimit) {
+        return "El asistente está recibiendo demasiadas solicitudes en este momento. Por favor, espera unos segundos e intenta de nuevo. (The assistant is temporarily busy. Please wait a moment and try again.)";
+    }
+    // For any other upstream error avoid forwarding internal detail; return a
+    // generic user-facing message instead.
+    return "Lo siento, no pude completar tu solicitud en este momento. Por favor, intenta de nuevo en un momento. (Sorry, I couldn't complete the request right now. Please try again in a moment.)";
+}
+
 function buildSpaceEndpointMetadata() {
     const apiBaseUrl = SPACE_URL;
 
@@ -94,19 +123,20 @@ export async function POST(request) {
         const result = await response.json();
 
         if (!response.ok) {
-            throw new Error(result.error || `Assistant request failed with status ${response.status}.`);
+            // Use the upstream reply/error text for sanitization, but never
+            // forward raw provider or rate-limit error text to the browser.
+            const upstreamDetail = result.error || result.reply || `Assistant request failed with status ${response.status}.`;
+            throw new Error(upstreamDetail);
         }
 
         return NextResponse.json({
             data: result ?? null,
         });
     } catch (error) {
+        const rawMessage = error instanceof Error ? error.message : "";
         return NextResponse.json(
             {
-                error:
-                    error instanceof Error
-                        ? error.message
-                        : "Unexpected error while querying the Gradio assistant.",
+                error: sanitizeUpstreamError(rawMessage),
             },
             { status: 500 }
         );
