@@ -17,12 +17,11 @@ from pathlib import Path
 import gradio as gr
 import whisper
 from dotenv import load_dotenv
-from langchain.chains import RetrievalQA
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_core.documents import Document
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.llms import HuggingFaceHub
 from langchain_community.vectorstores import FAISS
-from langchain.docstore.document import Document
 from openai import OpenAI
 
 APP_DIR = Path(__file__).parent
@@ -83,6 +82,16 @@ if LLM_PROVIDER == "github" and not GITHUB_TOKEN:
 # ─────────────────────────────────────────────
 # 1. Load inventory data
 # ─────────────────────────────────────────────
+SYSTEM_PROMPT = (
+    "You are Turbobujias AI Assistant, a specialist in spark plugs, glow plugs, diesel parts, "
+    "SKU/UPC matching, and vehicle compatibility for the Venezuelan market. "
+    "Use the catalog context as the primary source of truth. "
+    "Before answering, silently self-check for contradictions, missing fitment details, and invented part numbers. "
+    "If the catalog is insufficient or the application is ambiguous, say so clearly and ask for the minimum follow-up details needed, "
+    "such as brand, model, engine, fuel type, or year. "
+    "Prefer concise, practical answers with exact SKU references when available, short comparisons when useful, and a brief note about uncertainty when needed."
+)
+
 INVENTORY_PATH = APP_DIR / "inventory.json"
 
 if not INVENTORY_PATH.exists():
@@ -132,21 +141,14 @@ retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 # ─────────────────────────────────────────────
 # 3. Set up LLM (Mistral-7B via HuggingFaceHub)
 # ─────────────────────────────────────────────
-qa_chain = None
 github_client = None
+hf_llm = None
 
 if LLM_PROVIDER == "huggingface":
-    llm = HuggingFaceHub(
+    hf_llm = HuggingFaceHub(
         repo_id=HF_MODEL_REPO_ID,
         huggingfacehub_api_token=HF_TOKEN,
         model_kwargs={"temperature": 0.3, "max_new_tokens": 512},
-    )
-
-    qa_chain = RetrievalQA.from_chain_type(
-        llm=llm,
-        chain_type="stuff",
-        retriever=retriever,
-        return_source_documents=True,
     )
 
 if LLM_PROVIDER == "github":
@@ -178,11 +180,7 @@ def answer_with_github_models(
     messages = [
         {
             "role": "system",
-            "content": (
-                "You are Turbobujias AI Assistant. Answer only with help from the "
-                "provided catalog context when possible. If the catalog does not contain "
-                "enough information, say so clearly and avoid inventing part numbers or fitments."
-            ),
+            "content": SYSTEM_PROMPT,
         }
     ]
 
@@ -216,6 +214,43 @@ def answer_with_github_models(
     return answer, sources
 
 
+def answer_with_huggingface(
+    query: str,
+    history: list[tuple[str, str]] | None = None,
+) -> tuple[str, list[str]]:
+    docs = retriever.invoke(query)
+    context = "\n\n".join(doc.page_content for doc in docs)
+
+    history_lines = []
+    for previous_user, previous_assistant in (history or [])[-4:]:
+        if previous_user:
+            history_lines.append(f"User: {previous_user}")
+        if previous_assistant:
+            history_lines.append(f"Assistant: {previous_assistant}")
+
+    conversation_context = "\n".join(history_lines).strip()
+    if not conversation_context:
+        conversation_context = "No previous conversation."
+
+    prompt = (
+        f"{SYSTEM_PROMPT}\n\n"
+        "System rules:\n"
+        "- Use only the catalog context as authoritative evidence.\n"
+        "- Do not invent fitments, gap values, thread sizes, or part numbers.\n"
+        "- If the request is ambiguous, ask a short clarifying question.\n"
+        "- If multiple SKUs might fit, explain the difference briefly.\n"
+        "- Perform a silent self-check before answering to ensure the response is grounded in the catalog context.\n\n"
+        f"Recent conversation:\n{conversation_context}\n\n"
+        f"Catalog context:\n{context}\n\n"
+        f"Customer question:\n{query}\n\n"
+        "Answer in the customer's language when possible and keep the response practical."
+    )
+
+    answer = str(hf_llm.invoke(prompt)).strip()
+    sources = [doc.metadata.get("sku", "?") for doc in docs]
+    return answer, sources
+
+
 def answer_query(
     query: str,
     history: list[tuple[str, str]] | None = None,
@@ -223,10 +258,7 @@ def answer_query(
     if LLM_PROVIDER == "github":
         return answer_with_github_models(query, history=history)
 
-    result = qa_chain({"query": query})
-    answer = result["result"].strip()
-    sources = [doc.metadata.get("sku", "?") for doc in result.get("source_documents", [])]
-    return answer, sources
+    return answer_with_huggingface(query, history=history)
 
 
 def serialize_history(history: list[tuple[str, str]]) -> list[dict[str, str]]:
@@ -347,7 +379,18 @@ def answer_voice(audio_path: str | None, history: list) -> tuple[list, list]:
 # 6. Gradio UI
 # ─────────────────────────────────────────────
 with gr.Blocks(title="Turbobujias AI Assistant", theme=gr.themes.Soft()) as demo:
-    gr.api(chat_api, api_name="chat")
+    api_message = gr.Textbox(label="message", visible=False)
+    api_history = gr.JSON(label="history", visible=False)
+    api_response = gr.JSON(label="response", visible=False)
+    api_trigger = gr.Button("API chat trigger", visible=False)
+
+    api_trigger.click(
+        chat_api,
+        inputs=[api_message, api_history],
+        outputs=[api_response],
+        api_name="chat",
+        show_api=False,
+    )
 
     gr.Markdown(
         """
