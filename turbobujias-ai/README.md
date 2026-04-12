@@ -21,21 +21,25 @@ The chatbot now supports two model providers:
 
 ### Option A: GitHub Models
 
+Recommended for the first option when you want a simple GitHub-hosted model setup and a good default for free-tier experimentation.
+
 Recommended environment variables:
 
 - `LLM_PROVIDER=github`
-- `GITHUB_MODELS_TOKEN` — GitHub PAT with `models:read`
-- `GITHUB_MODELS_MODEL` — defaults to `openai/gpt-4.1`
+- `GITHUB_TOKEN` — GitHub token used by the OpenAI-compatible client
+- `GITHUB_MODELS_TOKEN` — optional backwards-compatible alias for `GITHUB_TOKEN`
+- `GITHUB_MODELS_MODEL` — defaults to `openai/gpt-4o`
 - `GITHUB_MODELS_ORG` — optional organization login for org-attributed usage
-- `GITHUB_MODELS_API_VERSION` — defaults to `2026-03-10`
 
 If `GITHUB_MODELS_ORG` is set, requests use:
 
-- `https://models.github.ai/orgs/{ORG}/inference/chat/completions`
+- `https://models.github.ai/orgs/{ORG}/inference`
 
 Otherwise they use:
 
-- `https://models.github.ai/inference/chat/completions`
+- `https://models.github.ai/inference`
+
+The app uses the OpenAI Python SDK against the GitHub Models inference endpoint, with `GITHUB_TOKEN` read from the environment.
 
 ### Option B: Hugging Face Inference
 
@@ -59,10 +63,10 @@ Otherwise they use:
 If you want to use **GitHub Models** from inside the Space:
 
 - `LLM_PROVIDER=github`
-- `GITHUB_MODELS_TOKEN=...`
-- `GITHUB_MODELS_MODEL=openai/gpt-4.1`
+- `GITHUB_TOKEN=...`
+- `GITHUB_MODELS_TOKEN=...` (optional alias)
+- `GITHUB_MODELS_MODEL=openai/gpt-4o`
 - `GITHUB_MODELS_ORG=` (optional)
-- `GITHUB_MODELS_API_VERSION=2026-03-10`
 
 If you want to use **Hugging Face Inference** instead:
 
@@ -93,6 +97,56 @@ The Space already includes the files Hugging Face expects:
 3. Start the app with `python app.py`
 
 The app will bind to `0.0.0.0` and use `PORT` when provided by the platform.
+
+### GitHub Models quick start
+
+To use the first chatbot option with GitHub Models, export your token as `GITHUB_TOKEN`.
+
+#### bash
+
+```bash
+export GITHUB_TOKEN="<your-github-token-goes-here>"
+```
+
+#### PowerShell
+
+```powershell
+$Env:GITHUB_TOKEN="<your-github-token-goes-here>"
+```
+
+#### Windows Command Prompt
+
+```cmd
+set GITHUB_TOKEN=<your-github-token-goes-here>
+```
+
+The GitHub-backed chatbot path uses:
+
+- endpoint: `https://models.github.ai/inference`
+- default model: `openai/gpt-4o`
+- SDK: `openai`
+
+Minimal equivalent sample:
+
+```python
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="https://models.github.ai/inference",
+    api_key=os.environ["GITHUB_TOKEN"],
+)
+
+response = client.chat.completions.create(
+    model="openai/gpt-4o",
+    messages=[
+        {"role": "system", "content": "You are a helpful assistant."},
+        {"role": "user", "content": "What is the capital of France?"},
+    ],
+)
+
+print(response.choices[0].message.content)
+```
 
 ## Chat API for the React storefront
 

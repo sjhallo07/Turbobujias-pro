@@ -15,7 +15,6 @@ import sys
 from pathlib import Path
 
 import gradio as gr
-import requests
 import whisper
 from dotenv import load_dotenv
 from langchain.chains import RetrievalQA
@@ -24,6 +23,7 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_community.llms import HuggingFaceHub
 from langchain_community.vectorstores import FAISS
 from langchain.docstore.document import Document
+from openai import OpenAI
 
 APP_DIR = Path(__file__).parent
 load_dotenv(APP_DIR / ".env")
@@ -39,23 +39,19 @@ HF_MODEL_REPO_ID = os.environ.get(
     "HF_MODEL_REPO_ID",
     "mistralai/Mistral-7B-Instruct-v0.2",
 ).strip()
-GITHUB_MODELS_TOKEN = (
-    os.environ.get("GITHUB_MODELS_TOKEN", "").strip()
-    or os.environ.get("GITHUB_TOKEN", "").strip()
+GITHUB_TOKEN = (
+    os.environ.get("GITHUB_TOKEN", "").strip()
+    or os.environ.get("GITHUB_MODELS_TOKEN", "").strip()
 )
 GITHUB_MODELS_MODEL = os.environ.get(
     "GITHUB_MODELS_MODEL",
-    "openai/gpt-4.1",
+    "openai/gpt-4o",
 ).strip()
 GITHUB_MODELS_ORG = os.environ.get("GITHUB_MODELS_ORG", "").strip()
-GITHUB_MODELS_API_VERSION = os.environ.get(
-    "GITHUB_MODELS_API_VERSION",
-    "2026-03-10",
-).strip()
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "").strip().lower()
 
 if not LLM_PROVIDER:
-    LLM_PROVIDER = "github" if GITHUB_MODELS_TOKEN else "huggingface"
+    LLM_PROVIDER = "github" if GITHUB_TOKEN else "huggingface"
 
 if LLM_PROVIDER not in {"github", "huggingface"}:
     print(
@@ -75,11 +71,11 @@ if LLM_PROVIDER == "huggingface" and not HF_TOKEN:
     )
     sys.exit(1)
 
-if LLM_PROVIDER == "github" and not GITHUB_MODELS_TOKEN:
+if LLM_PROVIDER == "github" and not GITHUB_TOKEN:
     print(
-        "ERROR: GITHUB_MODELS_TOKEN environment variable is not set. "
+        "ERROR: GITHUB_TOKEN environment variable is not set. "
         "Add a GitHub personal access token with models:read permission. "
-        "You can also use GITHUB_TOKEN if your runtime provides one.",
+        "GITHUB_MODELS_TOKEN is still accepted as a backwards-compatible fallback.",
         file=sys.stderr,
     )
     sys.exit(1)
@@ -137,6 +133,7 @@ retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 # 3. Set up LLM (Mistral-7B via HuggingFaceHub)
 # ─────────────────────────────────────────────
 qa_chain = None
+github_client = None
 
 if LLM_PROVIDER == "huggingface":
     llm = HuggingFaceHub(
@@ -152,6 +149,16 @@ if LLM_PROVIDER == "huggingface":
         return_source_documents=True,
     )
 
+if LLM_PROVIDER == "github":
+    github_client = OpenAI(
+        base_url=(
+            f"https://models.github.ai/orgs/{GITHUB_MODELS_ORG}/inference"
+            if GITHUB_MODELS_ORG
+            else "https://models.github.ai/inference"
+        ),
+        api_key=GITHUB_TOKEN,
+    )
+
 # ─────────────────────────────────────────────
 # 4. Whisper model for voice transcription
 # ─────────────────────────────────────────────
@@ -162,61 +169,59 @@ whisper_model = whisper.load_model("base")
 # ─────────────────────────────────────────────
 # 5. Helper functions
 # ─────────────────────────────────────────────
-def github_models_endpoint() -> str:
-    if GITHUB_MODELS_ORG:
-        return f"https://models.github.ai/orgs/{GITHUB_MODELS_ORG}/inference/chat/completions"
-    return "https://models.github.ai/inference/chat/completions"
-
-
-def answer_with_github_models(query: str) -> tuple[str, list[str]]:
+def answer_with_github_models(
+    query: str,
+    history: list[tuple[str, str]] | None = None,
+) -> tuple[str, list[str]]:
     docs = retriever.invoke(query)
     context = "\n\n".join(doc.page_content for doc in docs)
-    payload = {
-        "model": GITHUB_MODELS_MODEL,
-        "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are Turbobujias AI Assistant. Answer only with help from the "
-                    "provided catalog context when possible. If the catalog does not contain "
-                    "enough information, say so clearly and avoid inventing part numbers or fitments."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"Catalog context:\n{context}\n\n"
-                    f"Customer question: {query}\n\n"
-                    "Respond in the same language as the customer when possible."
-                ),
-            },
-        ],
-        "temperature": 0.3,
-        "max_tokens": 512,
-        "stream": False,
-    }
-    headers = {
-        "Accept": "application/vnd.github+json",
-        "Authorization": f"Bearer {GITHUB_MODELS_TOKEN}",
-        "X-GitHub-Api-Version": GITHUB_MODELS_API_VERSION,
-        "Content-Type": "application/json",
-    }
-    response = requests.post(
-        github_models_endpoint(),
-        headers=headers,
-        json=payload,
-        timeout=90,
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are Turbobujias AI Assistant. Answer only with help from the "
+                "provided catalog context when possible. If the catalog does not contain "
+                "enough information, say so clearly and avoid inventing part numbers or fitments."
+            ),
+        }
+    ]
+
+    for previous_user, previous_assistant in (history or [])[-4:]:
+        if previous_user:
+            messages.append({"role": "user", "content": previous_user})
+        if previous_assistant:
+            messages.append({"role": "assistant", "content": previous_assistant})
+
+    messages.append(
+        {
+            "role": "user",
+            "content": (
+                f"Catalog context:\n{context}\n\n"
+                f"Customer question: {query}\n\n"
+                "Respond in the same language as the customer when possible."
+            ),
+        }
     )
-    response.raise_for_status()
-    result = response.json()
-    answer = result["choices"][0]["message"]["content"].strip()
+
+    response = github_client.chat.completions.create(
+        messages=messages,
+        temperature=0.3,
+        top_p=1.0,
+        max_tokens=800,
+        model=GITHUB_MODELS_MODEL,
+    )
+
+    answer = (response.choices[0].message.content or "").strip()
     sources = [doc.metadata.get("sku", "?") for doc in docs]
     return answer, sources
 
 
-def answer_query(query: str) -> tuple[str, list[str]]:
+def answer_query(
+    query: str,
+    history: list[tuple[str, str]] | None = None,
+) -> tuple[str, list[str]]:
     if LLM_PROVIDER == "github":
-        return answer_with_github_models(query)
+        return answer_with_github_models(query, history=history)
 
     result = qa_chain({"query": query})
     answer = result["result"].strip()
@@ -277,7 +282,7 @@ def chat_api(message: str, history: list[dict[str, str]] | None = None) -> dict[
         }
 
     try:
-        answer, sources = answer_query(message)
+        answer, sources = answer_query(message, current_history)
     except Exception as exc:
         answer = (
             "Sorry, I couldn't complete the request right now. "
@@ -299,7 +304,7 @@ def answer_text(query: str, history: list) -> tuple[str, list, list]:
     if not query.strip():
         return "", history, history
     try:
-        answer, sources = answer_query(query)
+        answer, sources = answer_query(query, history)
     except Exception as exc:
         answer = (
             "Sorry, I couldn't complete the request right now. "
