@@ -138,6 +138,12 @@ def load_inventory() -> list[Document]:
     return docs
 
 
+def load_inventory_items() -> list[dict[str, Any]]:
+    with open(INVENTORY_PATH, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return data.get("items", [])
+
+
 def extract_doc_field(doc: Document, field_name: str) -> str:
     pattern = rf"{field_name}:\s*([^|]+)"
     match = re.search(pattern, doc.page_content)
@@ -232,32 +238,63 @@ def collect_source_skus(query: str, answer: str, docs: list[Document]) -> list[s
 
 def is_exact_lookup_query(query: str) -> bool:
     lowered = query.casefold()
-    return (
-        "sku" in lowered
-        or "upc" in lowered
-        or "ean" in lowered
-        or bool(re.search(r"\b\d{8,14}\b", query))
+    has_code = bool(re.search(r"\b\d{8,14}\b", query)) or bool(
+        re.search(r"\b[A-Z0-9]+(?:-[A-Z0-9]+)+\b", query.upper())
+    )
+    lookup_terms = any(
+        term in lowered
+        for term in ["sku", "upc", "ean", "barcode", "lookup", "match", "matches", "which product", "what product"]
+    )
+    explanation_terms = any(
+        term in lowered
+        for term in ["explain", "definition", "what is", "machine learning", "llm", "compare", "difference", "using examples"]
     )
 
+    if explanation_terms:
+        return False
 
-def build_exact_lookup_answer(doc: Document) -> str:
-    sku = str(doc.metadata.get("sku", "")).strip()
-    upc = str(doc.metadata.get("upc", "")).strip()
-    brand = extract_doc_field(doc, "Brand")
-    model = extract_doc_field(doc, "Model")
-    part_type = extract_doc_field(doc, "Type")
-    thread = extract_doc_field(doc, "Thread")
-    gap = extract_doc_field(doc, "Gap")
-    electrode = extract_doc_field(doc, "Electrode")
-    price = extract_doc_field(doc, "Price USD")
-    applications = extract_doc_field(doc, "Applications")
+    return has_code and lookup_terms
+
+
+def find_exact_inventory_item(query: str) -> dict[str, Any] | None:
+    sku_candidates = set(re.findall(r"\b[A-Z0-9]+(?:-[A-Z0-9]+)+\b", query.upper()))
+    digit_tokens = set(re.findall(r"\b\d{8,14}\b", query))
+    normalized = query.casefold()
+
+    for item in inventory_items:
+        sku = str(item.get("sku", "")).strip().upper()
+        upc = str(item.get("upc", "")).strip()
+
+        if sku and sku in sku_candidates:
+            return item
+        if upc and upc in digit_tokens:
+            return item
+        if sku and sku.casefold() in normalized:
+            return item
+
+    return None
+
+
+def build_exact_lookup_answer(item: dict[str, Any]) -> str:
+    sku = str(item.get("sku", "")).strip()
+    upc = str(item.get("upc", "")).strip()
+    brand = str(item.get("brand", "")).strip()
+    model = str(item.get("model", "")).strip()
+    raw_type = str(item.get("type", "")).strip()
+    part_type = "Calentador" if raw_type == "diesel_glow_plug" else "Bujía"
+    thread = str(item.get("thread", "")).strip()
+    gap_value = item.get("gap_mm", "")
+    gap = f"{gap_value} mm" if gap_value != "" else "N/A"
+    electrode = str(item.get("electrode", item.get("voltage", "N/A"))).strip()
+    price = f"${item.get('price_usd', 'N/A')} USD"
+    applications = item.get("application", [])
 
     application_lines = []
     if applications:
         application_lines = [
-            f"  - {application.strip()}"
-            for application in applications.split(";")
-            if application.strip()
+            f"  - {str(application).strip()}"
+            for application in applications
+            if str(application).strip()
         ]
 
     answer_lines = [
@@ -288,15 +325,15 @@ def try_exact_lookup_answer(query: str, docs: list[Document]) -> tuple[str, list
     if not is_exact_lookup_query(query):
         return None
 
-    if not docs:
+    exact_item = find_exact_inventory_item(query)
+    if exact_item is None:
         return None
 
-    exact_doc = docs[0]
-    sku = str(exact_doc.metadata.get("sku", "")).strip()
+    sku = str(exact_item.get("sku", "")).strip()
     if not sku:
         return None
 
-    answer = build_exact_lookup_answer(exact_doc)
+    answer = build_exact_lookup_answer(exact_item)
     sources = [sku]
     return answer, sources
 
@@ -310,6 +347,7 @@ print("Loading embeddings model…")
 embeddings = HuggingFaceEmbeddings(model_name=EMBED_MODEL)
 
 print("Building FAISS index from inventory…")
+inventory_items = load_inventory_items()
 documents = load_inventory()
 splitter = RecursiveCharacterTextSplitter(chunk_size=500, chunk_overlap=50)
 chunks = splitter.split_documents(documents)
