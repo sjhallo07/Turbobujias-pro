@@ -636,17 +636,17 @@ def answer_with_huggingface(
     if exact_lookup is not None:
         return exact_lookup
 
-    prompt = build_huggingface_prompt(query, docs, history)
+    messages = build_github_messages(query, docs, history)
+    response = huggingface_client.chat_completion(
+        messages=messages,
+        model=HF_MODEL_REPO_ID,
+        max_tokens=HF_MAX_NEW_TOKENS,
+        temperature=0.2,
+        top_p=0.9,
+    )
+
     answer = str(
-        huggingface_client.text_generation(
-            prompt,
-            model=HF_MODEL_REPO_ID,
-            max_new_tokens=HF_MAX_NEW_TOKENS,
-            temperature=0.2,
-            top_p=0.9,
-            do_sample=True,
-            return_full_text=False,
-        )
+        response.choices[0].message.content or ""
     ).strip()
     sources = collect_source_skus(query, answer, docs)
     return answer, sources
