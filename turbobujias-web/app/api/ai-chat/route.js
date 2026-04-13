@@ -12,6 +12,34 @@ const CHAT_API_NAME =
 const HF_TOKEN = process.env.HF_TOKEN || "";
 const OPENAPI_PATH = "/openapi.json";
 
+const RATE_LIMIT_INDICATORS = [
+    "rate limit",
+    "ratelimit",
+    "too many requests",
+    "429",
+    "terms of service",
+    "terms-of-service",
+    "scraping",
+    "github terms",
+    "quota",
+];
+
+function sanitizeUpstreamError(rawMessage) {
+    const lower = typeof rawMessage === "string" ? rawMessage.toLowerCase() : "";
+    const isRateLimit = RATE_LIMIT_INDICATORS.some((keyword) => lower.includes(keyword));
+
+    if (isRateLimit) {
+        return "El asistente está recibiendo demasiadas solicitudes en este momento. Por favor, espera unos segundos e intenta de nuevo. (The assistant is temporarily busy. Please wait a moment and try again.)";
+    }
+
+    return "Lo siento, no pude completar tu solicitud en este momento. Por favor, intenta de nuevo en un momento. (Sorry, I couldn't complete the request right now. Please try again in a moment.)";
+}
+
+function looksLikeProviderError(rawMessage) {
+    const lower = typeof rawMessage === "string" ? rawMessage.toLowerCase() : "";
+    return RATE_LIMIT_INDICATORS.some((keyword) => lower.includes(keyword));
+}
+
 function buildSpaceEndpointMetadata() {
     const apiBaseUrl = SPACE_URL;
 
@@ -94,19 +122,28 @@ export async function POST(request) {
         const result = await response.json();
 
         if (!response.ok) {
-            throw new Error(result.error || `Assistant request failed with status ${response.status}.`);
+            const upstreamDetail =
+                result?.error || result?.reply || `Assistant request failed with status ${response.status}.`;
+            throw new Error(upstreamDetail);
+        }
+
+        const sanitizedResult = result && typeof result === "object" ? { ...result } : result;
+
+        if (sanitizedResult?.reply && looksLikeProviderError(sanitizedResult.reply)) {
+            sanitizedResult.reply = sanitizeUpstreamError(sanitizedResult.reply);
+            sanitizedResult.sources = [];
         }
 
         return NextResponse.json({
-            data: result ?? null,
+            data: sanitizedResult ?? null,
         });
     } catch (error) {
+        const rawMessage = error instanceof Error ? error.message : String(error);
+        console.error("[ai-chat] upstream error (hidden from client):", rawMessage);
+
         return NextResponse.json(
             {
-                error:
-                    error instanceof Error
-                        ? error.message
-                        : "Unexpected error while querying the Gradio assistant.",
+                error: sanitizeUpstreamError(rawMessage),
             },
             { status: 500 }
         );
