@@ -10,6 +10,7 @@ Stack:
 """
 
 import json
+import logging
 import os
 import re
 import sys
@@ -17,20 +18,50 @@ from pathlib import Path
 from typing import Any
 
 import gradio as gr
+import requests
 import whisper
 from dotenv import load_dotenv
 from fastapi import FastAPI
+from huggingface_hub import InferenceClient
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.llms import HuggingFaceHub
 from langchain_community.vectorstores import FAISS
 from openai import OpenAI
 from pydantic import BaseModel, Field
 import uvicorn
 
 APP_DIR = Path(__file__).parent
+ROOT_ENV_PATH = APP_DIR.parent / ".env"
 load_dotenv(APP_DIR / ".env")
+if ROOT_ENV_PATH.exists():
+    load_dotenv(ROOT_ENV_PATH, override=False)
+
+logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO").upper())
+_log = logging.getLogger(__name__)
+
+
+def env_int(name: str, default: int) -> int:
+    try:
+        return int(str(os.environ.get(name, default)).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def env_float(name: str, default: float) -> float:
+    try:
+        return float(str(os.environ.get(name, default)).strip())
+    except (TypeError, ValueError):
+        return default
+
+
+def env_bool(name: str, default: bool = False) -> bool:
+    raw = str(os.environ.get(name, default)).strip().lower()
+    if raw in {"1", "true", "yes", "on"}:
+        return True
+    if raw in {"0", "false", "no", "off"}:
+        return False
+    return default
 
 # ─────────────────────────────────────────────
 # 0. Validate required environment variables
@@ -52,14 +83,46 @@ GITHUB_MODELS_MODEL = os.environ.get(
     "openai/gpt-4o",
 ).strip()
 GITHUB_MODELS_ORG = os.environ.get("GITHUB_MODELS_ORG", "").strip()
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.0-flash-lite").strip()
+GEMINI_API_BASE_URL = os.environ.get(
+    "GEMINI_API_BASE_URL",
+    "https://generativelanguage.googleapis.com/v1beta",
+).strip().rstrip("/")
 LLM_PROVIDER = os.environ.get("LLM_PROVIDER", "").strip().lower()
+GEMINI_FALLBACK_ENABLED = env_bool("GEMINI_FALLBACK_ENABLED", True)
+GITHUB_TIMEOUT_SECONDS = env_float("GITHUB_TIMEOUT_SECONDS", 10.0)
+GITHUB_MAX_TOKENS = env_int("GITHUB_MAX_TOKENS", 600)
+HF_MAX_NEW_TOKENS = env_int("HF_MAX_NEW_TOKENS", 384)
+HF_TIMEOUT_SECONDS = env_float("HF_TIMEOUT_SECONDS", 20.0)
+GEMINI_TIMEOUT_SECONDS = env_float("GEMINI_TIMEOUT_SECONDS", 12.0)
+GEMINI_TEMPERATURE = env_float("GEMINI_TEMPERATURE", 0.2)
+GEMINI_TOP_P = env_float("GEMINI_TOP_P", 0.9)
+GEMINI_MAX_OUTPUT_TOKENS = env_int("GEMINI_MAX_OUTPUT_TOKENS", 384)
+
+configured_providers = {
+    "github": bool(GITHUB_TOKEN),
+    "huggingface": bool(HF_TOKEN),
+    "gemini": bool(GEMINI_API_KEY),
+}
 
 if not LLM_PROVIDER:
-    LLM_PROVIDER = "github" if GITHUB_TOKEN else "huggingface"
+    for provider_name in ("github", "gemini", "huggingface"):
+        if configured_providers[provider_name]:
+            LLM_PROVIDER = provider_name
+            break
 
-if LLM_PROVIDER not in {"github", "huggingface"}:
+if LLM_PROVIDER not in {"github", "huggingface", "gemini"}:
     print(
-        "ERROR: LLM_PROVIDER must be either 'github' or 'huggingface'.",
+        "ERROR: LLM_PROVIDER must be one of 'github', 'huggingface', or 'gemini'.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if not any(configured_providers.values()):
+    print(
+        "ERROR: No LLM credentials configured. Provide at least one of GITHUB_TOKEN, "
+        "GEMINI_API_KEY, or HF_TOKEN.",
         file=sys.stderr,
     )
     sys.exit(1)
@@ -75,14 +138,28 @@ if LLM_PROVIDER == "huggingface" and not HF_TOKEN:
     )
     sys.exit(1)
 
-if LLM_PROVIDER == "github" and not GITHUB_TOKEN:
+if LLM_PROVIDER == "gemini" and not GEMINI_API_KEY:
     print(
-        "ERROR: GITHUB_TOKEN environment variable is not set. "
-        "Add a GitHub personal access token with models:read permission. "
-        "GITHUB_MODELS_TOKEN is still accepted as a backwards-compatible fallback.",
+        "ERROR: GEMINI_API_KEY environment variable is not set. "
+        "Add a Google Gemini API key or choose another provider.",
         file=sys.stderr,
     )
     sys.exit(1)
+
+if LLM_PROVIDER == "github" and not GITHUB_TOKEN and not (
+    GEMINI_FALLBACK_ENABLED and GEMINI_API_KEY
+):
+    print(
+        "ERROR: GITHUB_TOKEN environment variable is not set. "
+        "Add a GitHub personal access token with models:read permission or configure GEMINI_API_KEY for fallback.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
+if LLM_PROVIDER == "github" and not GITHUB_TOKEN and GEMINI_FALLBACK_ENABLED and GEMINI_API_KEY:
+    _log.warning(
+        "LLM_PROVIDER=github but GITHUB_TOKEN is missing; the chatbot will use Gemini fallback."
+    )
 
 # ─────────────────────────────────────────────
 # 1. Load inventory data
@@ -358,16 +435,12 @@ retriever = vectorstore.as_retriever(search_kwargs={"k": 3})
 # 3. Set up LLM (Mistral-7B via HuggingFaceHub)
 # ─────────────────────────────────────────────
 github_client = None
-hf_llm = None
+huggingface_client = None
 
-if LLM_PROVIDER == "huggingface":
-    hf_llm = HuggingFaceHub(
-        repo_id=HF_MODEL_REPO_ID,
-        huggingfacehub_api_token=HF_TOKEN,
-        model_kwargs={"temperature": 0.3, "max_new_tokens": 512},
-    )
+if HF_TOKEN:
+    huggingface_client = InferenceClient(api_key=HF_TOKEN)
 
-if LLM_PROVIDER == "github":
+if GITHUB_TOKEN:
     github_client = OpenAI(
         base_url=(
             f"https://models.github.ai/orgs/{GITHUB_MODELS_ORG}/inference"
@@ -375,6 +448,8 @@ if LLM_PROVIDER == "github":
             else "https://models.github.ai/inference"
         ),
         api_key=GITHUB_TOKEN,
+        timeout=GITHUB_TIMEOUT_SECONDS,
+        max_retries=0,
     )
 
 # ─────────────────────────────────────────────
@@ -387,22 +462,77 @@ whisper_model = whisper.load_model("base")
 # ─────────────────────────────────────────────
 # 5. Helper functions
 # ─────────────────────────────────────────────
-def answer_with_github_models(
-    query: str,
-    history: list[tuple[str, str]] | None = None,
-) -> tuple[str, list[str]]:
-    docs = get_relevant_docs(query)
-    exact_lookup = try_exact_lookup_answer(query, docs)
-    if exact_lookup is not None:
-        return exact_lookup
+PROVIDER_ERROR_HINTS = frozenset(
+    {
+        "rate limit",
+        "ratelimit",
+        "too many requests",
+        "429",
+        "terms of service",
+        "terms-of-service",
+        "scraping",
+        "quota",
+        "service unavailable",
+        "timed out",
+        "timeout",
+        "temporarily unavailable",
+        "resource exhausted",
+    }
+)
 
+
+def is_provider_error(exc: Exception) -> bool:
+    if isinstance(exc, requests.RequestException):
+        return True
+
+    message = str(exc).lower()
+    return any(hint in message for hint in PROVIDER_ERROR_HINTS)
+
+
+def safe_llm_error_message(exc: Exception) -> str:
+    _log.warning("Chatbot provider failure hidden from user: %s", exc, exc_info=True)
+    if is_provider_error(exc):
+        return (
+            "El asistente está temporalmente ocupado en este momento. "
+            "Por favor, intenta de nuevo en unos segundos.\n"
+            "(The assistant is temporarily busy right now. Please try again in a few seconds.)"
+        )
+
+    return (
+        "Lo siento, no pude completar tu solicitud en este momento. "
+        "Por favor, intenta de nuevo en un momento.\n"
+        "(Sorry, I couldn't complete your request right now. Please try again shortly.)"
+    )
+
+
+def get_provider_execution_order() -> list[str]:
+    preferred_order = {
+        "github": ["github", "gemini", "huggingface"],
+        "gemini": ["gemini", "github", "huggingface"],
+        "huggingface": ["huggingface", "gemini", "github"],
+    }
+
+    order: list[str] = []
+    for provider_name in preferred_order.get(LLM_PROVIDER, [LLM_PROVIDER]):
+        if provider_name == "github" and not GITHUB_TOKEN:
+            continue
+        if provider_name == "gemini" and (not GEMINI_FALLBACK_ENABLED or not GEMINI_API_KEY):
+            continue
+        if provider_name == "huggingface" and not HF_TOKEN:
+            continue
+        if provider_name not in order:
+            order.append(provider_name)
+
+    return order
+
+
+def build_github_messages(
+    query: str,
+    docs: list[Document],
+    history: list[tuple[str, str]] | None = None,
+) -> list[dict[str, str]]:
     context = "\n\n".join(doc.page_content for doc in docs)
-    messages = [
-        {
-            "role": "system",
-            "content": SYSTEM_PROMPT,
-        }
-    ]
+    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     for previous_user, previous_assistant in (history or [])[-4:]:
         if previous_user:
@@ -421,30 +551,15 @@ def answer_with_github_models(
         }
     )
 
-    response = github_client.chat.completions.create(
-        messages=messages,
-        temperature=0.3,
-        top_p=1.0,
-        max_tokens=800,
-        model=GITHUB_MODELS_MODEL,
-    )
-
-    answer = (response.choices[0].message.content or "").strip()
-    sources = collect_source_skus(query, answer, docs)
-    return answer, sources
+    return messages
 
 
-def answer_with_huggingface(
+def build_huggingface_prompt(
     query: str,
+    docs: list[Document],
     history: list[tuple[str, str]] | None = None,
-) -> tuple[str, list[str]]:
-    docs = get_relevant_docs(query)
-    exact_lookup = try_exact_lookup_answer(query, docs)
-    if exact_lookup is not None:
-        return exact_lookup
-
+) -> str:
     context = "\n\n".join(doc.page_content for doc in docs)
-
     history_lines = []
     for previous_user, previous_assistant in (history or [])[-4:]:
         if previous_user:
@@ -452,11 +567,8 @@ def answer_with_huggingface(
         if previous_assistant:
             history_lines.append(f"Assistant: {previous_assistant}")
 
-    conversation_context = "\n".join(history_lines).strip()
-    if not conversation_context:
-        conversation_context = "No previous conversation."
-
-    prompt = (
+    conversation_context = "\n".join(history_lines).strip() or "No previous conversation."
+    return (
         f"{SYSTEM_PROMPT}\n\n"
         "System rules:\n"
         "- Use only the catalog context as authoritative evidence.\n"
@@ -470,7 +582,140 @@ def answer_with_huggingface(
         "Answer in the customer's language when possible and keep the response practical."
     )
 
-    answer = str(hf_llm.invoke(prompt)).strip()
+
+def extract_gemini_text(payload: dict[str, Any]) -> str:
+    for candidate in payload.get("candidates", []):
+        content = candidate.get("content", {})
+        parts = content.get("parts", [])
+        text_parts = [str(part.get("text", "")).strip() for part in parts if part.get("text")]
+        answer = "\n".join(part for part in text_parts if part).strip()
+        if answer:
+            return answer
+
+    raise RuntimeError("Gemini returned no text candidates.")
+
+
+def answer_with_github_models(
+    query: str,
+    history: list[tuple[str, str]] | None = None,
+    docs: list[Document] | None = None,
+) -> tuple[str, list[str]]:
+    if github_client is None:
+        raise RuntimeError("GitHub Models client is not configured.")
+
+    docs = docs or get_relevant_docs(query)
+    exact_lookup = try_exact_lookup_answer(query, docs)
+    if exact_lookup is not None:
+        return exact_lookup
+
+    messages = build_github_messages(query, docs, history)
+
+    response = github_client.chat.completions.create(
+        messages=messages,
+        temperature=0.2,
+        top_p=1.0,
+        max_tokens=GITHUB_MAX_TOKENS,
+        model=GITHUB_MODELS_MODEL,
+    )
+
+    answer = (response.choices[0].message.content or "").strip()
+    sources = collect_source_skus(query, answer, docs)
+    return answer, sources
+
+
+def answer_with_huggingface(
+    query: str,
+    history: list[tuple[str, str]] | None = None,
+    docs: list[Document] | None = None,
+) -> tuple[str, list[str]]:
+    if huggingface_client is None:
+        raise RuntimeError("Hugging Face LLM is not configured.")
+
+    docs = docs or get_relevant_docs(query)
+    exact_lookup = try_exact_lookup_answer(query, docs)
+    if exact_lookup is not None:
+        return exact_lookup
+
+    prompt = build_huggingface_prompt(query, docs, history)
+    answer = str(
+        huggingface_client.text_generation(
+            prompt,
+            model=HF_MODEL_REPO_ID,
+            max_new_tokens=HF_MAX_NEW_TOKENS,
+            temperature=0.2,
+            top_p=0.9,
+            do_sample=True,
+            return_full_text=False,
+        )
+    ).strip()
+    sources = collect_source_skus(query, answer, docs)
+    return answer, sources
+
+
+def answer_with_gemini(
+    query: str,
+    history: list[tuple[str, str]] | None = None,
+    docs: list[Document] | None = None,
+) -> tuple[str, list[str]]:
+    if not GEMINI_API_KEY:
+        raise RuntimeError("Gemini is not configured.")
+
+    docs = docs or get_relevant_docs(query)
+    exact_lookup = try_exact_lookup_answer(query, docs)
+    if exact_lookup is not None:
+        return exact_lookup
+
+    contents: list[dict[str, Any]] = []
+    for previous_user, previous_assistant in (history or [])[-4:]:
+        if previous_user:
+            contents.append({"role": "user", "parts": [{"text": previous_user}]})
+        if previous_assistant:
+            contents.append({"role": "model", "parts": [{"text": previous_assistant}]})
+
+    context = "\n\n".join(doc.page_content for doc in docs)
+    contents.append(
+        {
+            "role": "user",
+            "parts": [
+                {
+                    "text": (
+                        f"Catalog context:\n{context}\n\n"
+                        f"Customer question: {query}\n\n"
+                        "Respond in the same language as the customer when possible."
+                    )
+                }
+            ],
+        }
+    )
+
+    payload = {
+        "systemInstruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+        "contents": contents,
+        "generationConfig": {
+            "temperature": GEMINI_TEMPERATURE,
+            "topP": GEMINI_TOP_P,
+            "maxOutputTokens": GEMINI_MAX_OUTPUT_TOKENS,
+        },
+    }
+    response = requests.post(
+        f"{GEMINI_API_BASE_URL}/models/{GEMINI_MODEL}:generateContent",
+        headers={
+            "Content-Type": "application/json",
+            "X-goog-api-key": GEMINI_API_KEY,
+        },
+        json=payload,
+        timeout=GEMINI_TIMEOUT_SECONDS,
+    )
+
+    if not response.ok:
+        try:
+            error_payload = response.json()
+            error_message = error_payload.get("error", {}).get("message", "")
+        except ValueError:
+            error_message = response.text
+        raise RuntimeError(error_message or f"Gemini request failed with status {response.status_code}.")
+
+    answer = extract_gemini_text(response.json())
     sources = collect_source_skus(query, answer, docs)
     return answer, sources
 
@@ -479,10 +724,32 @@ def answer_query(
     query: str,
     history: list[tuple[str, str]] | None = None,
 ) -> tuple[str, list[str]]:
-    if LLM_PROVIDER == "github":
-        return answer_with_github_models(query, history=history)
+    docs = get_relevant_docs(query)
+    exact_lookup = try_exact_lookup_answer(query, docs)
+    if exact_lookup is not None:
+        return exact_lookup
 
-    return answer_with_huggingface(query, history=history)
+    handlers = {
+        "github": answer_with_github_models,
+        "huggingface": answer_with_huggingface,
+        "gemini": answer_with_gemini,
+    }
+    provider_order = get_provider_execution_order()
+    last_error: Exception | None = None
+
+    for provider_name in provider_order:
+        handler = handlers[provider_name]
+        try:
+            _log.info("Answering query with provider=%s", provider_name)
+            return handler(query, history=history, docs=docs)
+        except Exception as exc:
+            last_error = exc
+            _log.warning("Provider %s failed, trying next fallback if available: %s", provider_name, exc)
+
+    if last_error is not None:
+        raise last_error
+
+    raise RuntimeError("No LLM provider is available to answer the query.")
 
 
 def serialize_history(history: list[tuple[str, str]]) -> list[dict[str, str]]:
@@ -540,11 +807,7 @@ def chat_api(message: str, history: list[dict[str, str]] | None = None) -> dict[
     try:
         answer, sources = answer_query(message, current_history)
     except Exception as exc:
-        answer = (
-            "Sorry, I couldn't complete the request right now. "
-            "Please try again in a moment and verify that the Space secrets are configured correctly.\n\n"
-            f"Technical detail: {exc}"
-        )
+        answer = safe_llm_error_message(exc)
         sources = []
 
     updated_history = current_history + [(message, answer)]
@@ -603,11 +866,7 @@ def answer_text(query: str, history: list) -> tuple[str, list, list]:
     try:
         answer, sources = answer_query(query, history)
     except Exception as exc:
-        answer = (
-            "Sorry, I couldn't complete the request right now. "
-            "Please try again in a moment and verify that the Space secrets are configured correctly.\n\n"
-            f"Technical detail: {exc}"
-        )
+        answer = safe_llm_error_message(exc)
         sources = []
     if sources:
         answer += f"\n\n*Sources: {', '.join(sources)}*"
@@ -625,10 +884,11 @@ def answer_voice(audio_path: str | None, history: list) -> tuple[list, list]:
     try:
         transcription = whisper_model.transcribe(audio_path)["text"]
     except Exception as exc:
+        _log.warning("Whisper transcription error hidden from user: %s", exc, exc_info=True)
         error_message = (
-            "Sorry, I couldn't transcribe that audio right now. "
-            "Please try again with a shorter or clearer recording.\n\n"
-            f"Technical detail: {exc}"
+            "Lo siento, no pude transcribir ese audio en este momento. "
+            "Por favor, intenta de nuevo con una grabación más corta o más clara.\n"
+            "(Sorry, I couldn't transcribe that audio right now. Please try again with a shorter or clearer recording.)"
         )
         updated_history = history + [(
             "[voice input]",
@@ -648,6 +908,7 @@ with gr.Blocks(title="Turbobujias AI Assistant", theme=gr.themes.Soft()) as demo
         """
         # 🔧 Turbobujias AI Assistant
         Ask compatibility questions about **Diesel and Spark Plugs** in English or Spanish.
+        Uses **GitHub Models** first when available and can fail over to **Gemini Flash Lite** automatically.
         > *¿Qué bujía necesita un Toyota Hilux 2018 diesel?*
         > *Which spark plug fits a Honda Civic 1.6L 1998?*
         """

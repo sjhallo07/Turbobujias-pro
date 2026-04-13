@@ -2,6 +2,8 @@
     "chat.tools.terminal.backgroundNotifications": true,
     "workbench.browser.enableChatTools": true,
     "chat.mcp.serverSampling": {
+        no-loc:
+        - 
         "Turbobujias-pro/.vscode/mcp.json: io.github.github/github-mcp-server": {
             "allowedModels": [
                 "copilot/auto",
@@ -41,12 +43,29 @@
         },
         "Turbobujias-pro/.vscode/mcp.json: hf-mcp-server-bouquet": {
             "allowedModels": [
+                "copilot/auto",
+                "copilot/gemini-2.5-pro",
+                "copilot/gemini-3-flash-preview",
+                "copilot/gemini-3.1-pro-preview",
+                "copilotcli/gpt-4.1",
+                "copilot/gpt-4.1",
+                "copilot/gpt-4o",
+                "copilotcli/gpt-5-mini",
+                "copilot/gpt-5-mini",
+                "copilotcli/gpt-5.1",
+                "copilot/gpt-5.1",
+                "copilotcli/gpt-5.2",
+                "copilot/gpt-5.2",
+                "copilotcli/gpt-5.2-codex",
+                "copilot/gpt-5.2-codex",
                 "copilotcli/gpt-5.3-codex",
                 "copilot/gpt-5.3-codex",
                 "copilotcli/gpt-5.4",
                 "copilot/gpt-5.4",
                 "copilotcli/gpt-5.4-mini",
-                "copilot/gpt-5.4-mini"
+                "copilot/gpt-5.4-mini",
+                "copilot/grok-code-fast-1",
+                "copilot/oswe-vscode-prime"
             ]
         }
     },
@@ -65,5 +84,21 @@
     "python.analysis.autoFormatStrings": true,
     "python.analysis.enableTroubleshootMissingImports": true,
     "python.analysis.extraCommitChars": true,
-    "python.analysis.generateWithTypeAnnotation": true
+    "python.analysis.generateWithTypeAnnotation": true,
+    "python-envs.pythonProjects": [
+        {
+            "path": "turbobujias-ai/app.py",
+            "envManager": "ms-python.python:venv",
+            "packageManager": "ms-python.python:pip"
+        },
+        {
+            "path": "turbobujias-ai/mcp_http_client.py",
+            "envManager": "ms-python.python:venv",
+            "packageManager": "ms-python.python:pip"
+        }
+    ],
+    "chat.mcp.discovery.enabled": {
+        "cursor-workspace": true,
+        "claude-desktop": true
+    }
 }
