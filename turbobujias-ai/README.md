@@ -9,6 +9,7 @@ app_file: app.py
 python_version: "3.10"
 suggested_hardware: cpu-basic
 short_description: RAG chatbot for diesel and spark plug compatibility queries.
+pinned: false
 ---
 
 ## Turbobujias AI Assistant
