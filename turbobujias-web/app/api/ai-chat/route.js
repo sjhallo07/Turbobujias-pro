@@ -12,6 +12,12 @@ const CHAT_API_NAME =
 const HF_TOKEN = process.env.HF_TOKEN || "";
 const OPENAPI_PATH = "/openapi.json";
 
+/**
+ * Keywords that indicate a provider-level rate-limit or policy error.
+ * When any of these appear in the upstream error message the proxy replaces
+ * the raw text with a safe, user-friendly message so end users never see
+ * GitHub Terms-of-Service or scraping-policy wording.
+ */
 const RATE_LIMIT_INDICATORS = [
     "rate limit",
     "ratelimit",
@@ -24,20 +30,15 @@ const RATE_LIMIT_INDICATORS = [
     "quota",
 ];
 
-function sanitizeUpstreamError(rawMessage) {
-    const lower = typeof rawMessage === "string" ? rawMessage.toLowerCase() : "";
-    const isRateLimit = RATE_LIMIT_INDICATORS.some((keyword) => lower.includes(keyword));
-
+function sanitizeUpstreamError(raw) {
+    const lower = typeof raw === "string" ? raw.toLowerCase() : "";
+    const isRateLimit = RATE_LIMIT_INDICATORS.some((kw) => lower.includes(kw));
     if (isRateLimit) {
         return "El asistente está recibiendo demasiadas solicitudes en este momento. Por favor, espera unos segundos e intenta de nuevo. (The assistant is temporarily busy. Please wait a moment and try again.)";
     }
-
+    // For any other upstream error avoid forwarding internal detail; return a
+    // generic user-facing message instead.
     return "Lo siento, no pude completar tu solicitud en este momento. Por favor, intenta de nuevo en un momento. (Sorry, I couldn't complete the request right now. Please try again in a moment.)";
-}
-
-function looksLikeProviderError(rawMessage) {
-    const lower = typeof rawMessage === "string" ? rawMessage.toLowerCase() : "";
-    return RATE_LIMIT_INDICATORS.some((keyword) => lower.includes(keyword));
 }
 
 function buildSpaceEndpointMetadata() {
@@ -122,16 +123,10 @@ export async function POST(request) {
         const result = await response.json();
 
         if (!response.ok) {
-            const upstreamDetail =
-                result?.error || result?.reply || `Assistant request failed with status ${response.status}.`;
+            // Use the upstream reply/error text for sanitization, but never
+            // forward raw provider or rate-limit error text to the browser.
+            const upstreamDetail = result.error || result.reply || `Assistant request failed with status ${response.status}.`;
             throw new Error(upstreamDetail);
-        }
-
-        const sanitizedResult = result && typeof result === "object" ? { ...result } : result;
-
-        if (sanitizedResult?.reply && looksLikeProviderError(sanitizedResult.reply)) {
-            sanitizedResult.reply = sanitizeUpstreamError(sanitizedResult.reply);
-            sanitizedResult.sources = [];
         }
 
         return NextResponse.json({
@@ -139,8 +134,9 @@ export async function POST(request) {
         });
     } catch (error) {
         const rawMessage = error instanceof Error ? error.message : String(error);
+        // Log the original error server-side so it remains visible in server logs
+        // without being sent to the browser.
         console.error("[ai-chat] upstream error (hidden from client):", rawMessage);
-
         return NextResponse.json(
             {
                 error: sanitizeUpstreamError(rawMessage),

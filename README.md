@@ -144,7 +144,82 @@ project needs broader barcode coverage beyond the catalog stored in `inventory.j
 
 ---
 
-## 🤖 Smart AI Chatbot (Diesel / Spark Plugs)
+## 🔒 Operational best practices
+
+### Secrets and tokens
+
+- **Never commit real tokens** to the repository. All example files use placeholder
+  strings such as `your_github_token_here`.
+- Store production secrets as environment variables or CI/CD secrets (for example
+  Vercel environment variables, Hugging Face Space secrets, or GitHub Actions secrets).
+- Rotate any token that was ever copied into a file, issue comment, or PR body.
+
+### Backend startup
+
+```bash
+cd backend
+cp .env.example .env   # fill in real values; never commit the filled-in .env
+npm install
+npm start              # listens on PORT (default 3001)
+```
+
+The backend exposes `/api/health` as a smoke-check endpoint.
+
+### AI Chatbot startup
+
+```bash
+cd turbobujias-ai
+cp .env.example .env   # add GITHUB_TOKEN or HF_TOKEN; never commit this file
+pip install -r requirements.txt
+python app.py          # binds to 0.0.0.0:PORT (default 7860)
+```
+
+When `GITHUB_TOKEN` is set `LLM_PROVIDER` defaults to `github` automatically.
+Rate-limit errors from GitHub Models are retried internally (up to 3 attempts)
+and are **never** shown as raw error text in the chat UI.
+
+### Frontend startup
+
+```bash
+cd turbobujias-web
+cp .env.local.example .env.local   # or create it manually from the template below
+npm install
+npm run dev            # development server on port 3000
+```
+
+Minimal `.env.local` for local development:
+
+```bash
+NEXT_PUBLIC_API_URL=http://localhost:3001/api
+HF_SPACE_URL=https://sjhallo07-turbobujias-ai.hf.space
+```
+
+`HF_SPACE_URL` (server-only) controls the chatbot endpoint used by the Next.js
+API route. `NEXT_PUBLIC_API_URL` must point to the running backend.
+
+### Chatbot endpoint targeting
+
+The Next.js proxy route (`/api/ai-chat`) reads the Space URL in this priority order:
+
+1. `HF_SPACE_URL` (server-only, recommended for production)
+2. `NEXT_PUBLIC_HF_SPACE_URL` (also visible to the browser)
+3. Hard-coded fallback: `https://sjhallo07-turbobujias-ai.hf.space`
+
+Always set `HF_SPACE_URL` in production so the frontend never falls back to a
+stale or incorrect Space URL.
+
+### MCP configuration (.vscode/mcp.json)
+
+The repository's `.vscode/mcp.json` uses `${input:token}` and `${input:hfToken}`
+prompts so tokens are **never stored in the file**. When VS Code reads this file
+it asks you for the values at runtime and keeps them only in memory.
+
+- Do **not** replace the `${input:…}` placeholders with real token values.
+- Do **not** add hardcoded URLs pointing to internal or private services.
+
+---
+
+
 
 Powered by [Hugging Face Spaces](https://huggingface.co/spaces) using:
 
