@@ -136,10 +136,31 @@ button {
   border: 1px solid var(--border);
 }
 
+.brand-logo-shell {
+  display: grid;
+  place-items: center;
+  min-height: 96px;
+  padding: 0.55rem 0.9rem;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+}
 .brand-icon,
 .brand-logo {
   width: auto;
   height: auto;
+  max-width: 100%;
+  }
+  
+  .brand-icon {
+    max-width: 74px;
+    max-height: 74px;
+    border-radius: 18px;
+  }
+  
+  .brand-logo {
+    max-width: min(320px, 60vw);
+    max-height: 92px;
 }
 
 .hero p,
@@ -169,7 +190,7 @@ button {
 }
 
 .stats-grid {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
 }
 
 .support-grid,
@@ -249,6 +270,16 @@ button {
 .field-group textarea {
   resize: vertical;
   min-height: 110px;
+}
+.search-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 0.75rem;
+  align-items: stretch;
+}
+
+.search-submit-button {
+  min-width: 120px;
 }
 .filters-grid {
   margin-top: 1rem;
@@ -736,6 +767,13 @@ button {
     align-items: flex-start;
   }
 
+    .search-input-row {
+      grid-template-columns: 1fr;
+    }
+  
+    .search-submit-button {
+      width: 100%;
+    }
   .floating-contact-dock {
     right: 0.75rem;
     bottom: 0.75rem;

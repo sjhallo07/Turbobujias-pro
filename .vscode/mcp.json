@@ -25,6 +25,18 @@
 				"GITHUB_PERSONAL_ACCESS_TOKEN=${input:token}",
 				"ghcr.io/github/github-mcp-server:0.33.0"
 			]
+		},
+		"my-mcp-server-607bb799": {
+			"type": "stdio",
+			"command": "deploy",
+			"args": [
+				"update",
+				"space",
+				"in",
+				"hugging",
+				"face:",
+				"sjhallo07/turbobujias-ai"
+			]
 		}
 	},
 	"inputs": [

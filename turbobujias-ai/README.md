@@ -17,7 +17,11 @@ Gradio chatbot for diesel and spark plug compatibility questions in **Spanish an
 
 ## Model provider configuration
 
-The chatbot now supports two model providers:
+The chatbot supports three model providers and an automatic fallback chain.
+
+- Primary default: **GitHub Models**
+- Fast fallback when GitHub is unavailable or rate-limited: **Gemini Flash Lite**
+- Secondary fallback / alternative: **Hugging Face Inference**
 
 ### Option A: GitHub Models
 
@@ -47,9 +51,40 @@ The app uses the OpenAI Python SDK against the GitHub Models inference endpoint,
 - `HF_TOKEN` — Hugging Face token with inference permissions
 - `HF_MODEL_REPO_ID` — defaults to `mistralai/Mistral-7B-Instruct-v0.2`
 
-### Common variable
+### Option C: Gemini Flash Lite
+
+Recommended when you want a lower-cost, low-latency fallback for free-tier style usage.
+
+- `LLM_PROVIDER=gemini`
+- `GEMINI_API_KEY` — Google Gemini API key
+- `GEMINI_MODEL` — defaults to `gemini-2.0-flash-lite`
+- `GEMINI_TIMEOUT_SECONDS` — defaults to `12`
+- `GEMINI_TEMPERATURE` — defaults to `0.2`
+- `GEMINI_TOP_P` — defaults to `0.9`
+- `GEMINI_MAX_OUTPUT_TOKENS` — defaults to `384`
+
+### Fast fallback from GitHub Models to Gemini
+
+If you keep `LLM_PROVIDER=github` and also set `GEMINI_API_KEY`, the chatbot will:
+
+1. try GitHub Models first
+2. fail over quickly to Gemini when GitHub is unavailable, timing out, or rate-limited
+3. avoid showing raw provider errors in the chat UI
+
+Recommended environment variables for this mode:
+
+- `LLM_PROVIDER=github`
+- `GEMINI_FALLBACK_ENABLED=true`
+- `GEMINI_API_KEY=...`
+- `GEMINI_MODEL=gemini-2.0-flash-lite`
+- `GITHUB_TIMEOUT_SECONDS=10`
+- `GITHUB_MAX_TOKENS=600`
+- `GEMINI_MAX_OUTPUT_TOKENS=384`
+
+### Common variables
 
 - `PORT` — defaults to `7860`
+- `HF_MAX_NEW_TOKENS` — defaults to `384`
 
 ## Deploy to Hugging Face Spaces
 
@@ -67,6 +102,17 @@ If you want to use **GitHub Models** from inside the Space:
 - `GITHUB_MODELS_TOKEN=...` (optional alias)
 - `GITHUB_MODELS_MODEL=openai/gpt-4o`
 - `GITHUB_MODELS_ORG=` (optional)
+
+If you want **GitHub first, Gemini fallback** inside the Space:
+
+- `LLM_PROVIDER=github`
+- `GITHUB_TOKEN=...`
+- `GEMINI_FALLBACK_ENABLED=true`
+- `GEMINI_API_KEY=...`
+- `GEMINI_MODEL=gemini-2.0-flash-lite`
+- `GITHUB_TIMEOUT_SECONDS=10`
+- `GEMINI_TIMEOUT_SECONDS=12`
+- `GEMINI_MAX_OUTPUT_TOKENS=384`
 
 If you want to use **Hugging Face Inference** instead:
 
@@ -98,6 +144,90 @@ The Space already includes the files Hugging Face expects:
 
 The app will bind to `0.0.0.0` and use `PORT` when provided by the platform.
 
+### Recommended Python environment for this repository
+
+Use a **dedicated Python virtual environment only for `turbobujias-ai/`**.
+
+Why:
+
+- `backend/` is a **Node.js + Express** service
+- `turbobujias-web/` is a **Next.js** service
+- only `turbobujias-ai/` needs Python, Torch, Whisper, FAISS, and LangChain
+
+That means you should **not** create one shared Python environment for the whole project.
+Keep Python isolated to the chatbot service and keep Node dependencies isolated to each Node app.
+
+### Recommended Python version
+
+For local development on Windows, prefer **Python 3.13** for the chatbot.
+
+- Python 3.14 may require more package compilation work depending on wheels available for your machine.
+- A dedicated Python 3.13 virtual environment is the safest option for `gradio`, `whisper`, and related ML packages in this repo.
+
+Example setup:
+
+```powershell
+cd turbobujias-ai
+py -3.13 -m venv .venv313
+.\.venv313\Scripts\python.exe -m pip install --upgrade pip setuptools wheel
+.\.venv313\Scripts\python.exe -m pip install -r requirements.txt
+.\.venv313\Scripts\python.exe app.py
+```
+
+### How the full project is split locally
+
+Run the services independently:
+
+#### Backend API
+
+```powershell
+cd backend
+npm install
+node server.js
+```
+
+Default URL:
+
+- `http://127.0.0.1:3001/api/health`
+
+#### Frontend
+
+```powershell
+cd turbobujias-web
+npm install
+npm run build
+npm run start
+```
+
+Default URL:
+
+- `http://127.0.0.1:3000`
+
+#### Chatbot
+
+```powershell
+cd turbobujias-ai
+.\.venv313\Scripts\python.exe app.py
+```
+
+Default URL:
+
+- `http://127.0.0.1:7860`
+
+### Database note
+
+There is **no separate database server to start** for the current project layout.
+
+- the backend uses `backend/data/inventory.json`
+- the chatbot uses `turbobujias-ai/inventory.json`
+
+So the local stack is currently:
+
+- Node backend
+- Next.js frontend
+- Python chatbot
+- JSON files as the catalog data source
+
 ### GitHub Models quick start
 
 To use the first chatbot option with GitHub Models, export your token as `GITHUB_TOKEN`.
@@ -125,6 +255,19 @@ The GitHub-backed chatbot path uses:
 - endpoint: `https://models.github.ai/inference`
 - default model: `openai/gpt-4o`
 - SDK: `openai`
+
+### Gemini quick start
+
+To use Gemini directly, export your key as `GEMINI_API_KEY` and optionally keep `LLM_PROVIDER=gemini`.
+
+Recommended efficient defaults for this project:
+
+- model: `gemini-2.0-flash-lite`
+- temperature: `0.2`
+- top-p: `0.9`
+- max output tokens: `384`
+
+These defaults help keep latency and token usage lower than a heavier model while still producing practical catalog answers.
 
 Minimal equivalent sample:
 

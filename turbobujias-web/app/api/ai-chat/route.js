@@ -130,7 +130,7 @@ export async function POST(request) {
         }
 
         return NextResponse.json({
-            data: result ?? null,
+            data: sanitizedResult ?? null,
         });
     } catch (error) {
         const rawMessage = error instanceof Error ? error.message : String(error);

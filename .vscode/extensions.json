@@ -1,6 +1,9 @@
 {
     "recommendations": [
         "github.copilot-chat",
-        "dotenv.dotenvx-vscode"
+        "dotenv.dotenvx-vscode",
+        "ms-edgedevtools.vscode-edge-devtools",
+        "ms-python.vscode-python-envs",
+        "eamodio.gitlens"
     ]
 }
