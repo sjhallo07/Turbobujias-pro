@@ -17,18 +17,25 @@ import {
 } from "../lib/cartSlice";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
-const HF_SPACE_URL =
+const DEFAULT_HF_SPACE_URL =
   process.env.NEXT_PUBLIC_HF_SPACE_URL || "https://sjhallo07-turbobujias-ai.hf.space";
-const WHATSAPP_URL =
+const DEFAULT_WHATSAPP_URL =
   process.env.NEXT_PUBLIC_WHATSAPP_URL || "https://api.whatsapp.com/send";
-const INSTAGRAM_URL = process.env.NEXT_PUBLIC_INSTAGRAM_URL || "https://www.instagram.com/";
-const MERCADOLIBRE_URL =
+const DEFAULT_INSTAGRAM_URL =
+  process.env.NEXT_PUBLIC_INSTAGRAM_URL || "https://www.instagram.com/";
+const DEFAULT_MERCADOLIBRE_URL =
   process.env.NEXT_PUBLIC_MERCADOLIBRE_URL || "https://www.mercadolibre.com.ve/";
-const PAYPAL_URL = process.env.NEXT_PUBLIC_PAYPAL_URL || "https://www.paypal.com/";
-const BINANCE_PAY_URL =
+const DEFAULT_PAYPAL_URL = process.env.NEXT_PUBLIC_PAYPAL_URL || "https://www.paypal.com/";
+const DEFAULT_BINANCE_PAY_URL =
   process.env.NEXT_PUBLIC_BINANCE_PAY_URL || "https://pay.binance.com/";
+const BACKEND_BASE_URL = API_URL.replace(/\/api\/?$/, "");
 const TAX_RATE = 0.16;
 const SHIPPING_USD = 8;
+const CURRENCY_OPTIONS = [
+  { value: "USD", label: "Ver en USD" },
+  { value: "EUR", label: "Ver en EUR" },
+  { value: "VES", label: "Ver en VES" },
+];
 const VALID_THEME_VALUES = ["system", "light", "dark"];
 const THEME_OPTIONS = [
   { value: "system", label: "Sistema" },
@@ -76,22 +83,72 @@ function renderPrice(item, currencyMode) {
     return formatCurrency(item.price_ves, "VES");
   }
 
+  if (currencyMode === "EUR") {
+    return formatCurrency(item.price_eur, "EUR");
+  }
+
   return formatCurrency(item.price_usd, "USD");
 }
 
-function buildWhatsAppUrl(message) {
+function formatRateValue(value) {
+  const rate = Number(value);
+  if (!Number.isFinite(rate) || rate <= 0) {
+    return "—";
+  }
+
+  return new Intl.NumberFormat("es-VE", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 4,
+  }).format(rate);
+}
+
+function formatRelativeDate(value) {
+  if (!value) {
+    return "Actualización no disponible";
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return "Actualización no disponible";
+  }
+
+  return new Intl.DateTimeFormat("es-VE", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function buildWhatsAppUrl(baseUrl, message) {
   try {
-    const url = new URL(WHATSAPP_URL);
+    const url = new URL(baseUrl || DEFAULT_WHATSAPP_URL);
     url.searchParams.set("text", message);
     return url.toString();
   } catch (error) {
-    console.warn(`URL de WhatsApp inválida (${WHATSAPP_URL}), usando el fallback estándar.`, error);
+    console.warn(`URL de WhatsApp inválida (${baseUrl}), usando el fallback estándar.`, error);
     return `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
   }
 }
 
+function buildInstagramSearchUrl(baseUrl, query) {
+  const normalizedQuery = String(query || "").trim();
+  if (!normalizedQuery) {
+    return baseUrl || DEFAULT_INSTAGRAM_URL;
+  }
+
+  const encodedQuery = encodeURIComponent(`site:instagram.com/turbobujiaspro ${normalizedQuery}`);
+  return `https://www.google.com/search?q=${encodedQuery}`;
+}
+
 function convertLineTotal(lineTotal, currencyCode, exchangeRate) {
-  return currencyCode === "VES" ? lineTotal * exchangeRate : lineTotal;
+  if (currencyCode === "VES") {
+    return lineTotal * exchangeRate.usd_ves;
+  }
+
+  if (currencyCode === "EUR") {
+    return lineTotal * exchangeRate.usd_eur;
+  }
+
+  return lineTotal;
 }
 
 function buildCheckoutMessage({ items, currencyCode, exchangeRate, subtotalDisplay, totalDisplay }) {
@@ -117,8 +174,9 @@ function buildCheckoutMessage({ items, currencyCode, exchangeRate, subtotalDispl
 
 function useInventory() {
   const [items, setItems] = useState([]);
-  const [exchangeRate, setExchangeRate] = useState(0);
+  const [exchangeRates, setExchangeRates] = useState({ usd_ves: 0, eur_ves: 0, usd_eur: 0 });
   const [rateSource, setRateSource] = useState("FALLBACK");
+  const [ratesLastUpdated, setRatesLastUpdated] = useState("");
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -140,8 +198,15 @@ function useInventory() {
         }
 
         setItems(payload.items || []);
-        setExchangeRate(payload.exchange_rate || 0);
+        setExchangeRates(
+          payload.exchange_rates || {
+            usd_ves: payload.exchange_rate || 0,
+            eur_ves: 0,
+            usd_eur: 0,
+          }
+        );
         setRateSource(payload.rate_source || "FALLBACK");
+        setRatesLastUpdated(payload.rates_last_updated || "");
       } catch (fetchError) {
         if (isMounted) {
           setError(fetchError.message || "Error inesperado al cargar productos.");
@@ -160,7 +225,41 @@ function useInventory() {
     };
   }, []);
 
-  return { items, exchangeRate, rateSource, isLoading, error };
+  return { items, exchangeRates, rateSource, ratesLastUpdated, isLoading, error };
+}
+
+function usePublicRuntimeConfig() {
+  const [runtimeConfig, setRuntimeConfig] = useState(null);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchPublicConfig() {
+      try {
+        const response = await fetch(`${BACKEND_BASE_URL}/api/config/public`, {
+          cache: "no-store",
+        });
+        if (!response.ok) {
+          throw new Error("No se pudo cargar la configuración pública del backend.");
+        }
+
+        const payload = await response.json();
+        if (isMounted) {
+          setRuntimeConfig(payload);
+        }
+      } catch (fetchError) {
+        console.warn("No se pudo cargar la configuración pública del backend.", fetchError);
+      }
+    }
+
+    fetchPublicConfig();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  return runtimeConfig;
 }
 
 function useThemePreference() {
@@ -204,6 +303,13 @@ function useThemePreference() {
 }
 
 function InventoryCard({ item, currencyMode, onAdd, onConsult }) {
+  const priceLabel =
+    currencyMode === "VES"
+      ? "Precio BCV"
+      : currencyMode === "EUR"
+        ? "Precio convertido EUR"
+        : "Precio base USD";
+
   return (
     <article className="product-card">
       <div className="product-card-header">
@@ -221,7 +327,7 @@ function InventoryCard({ item, currencyMode, onAdd, onConsult }) {
       <div className="product-card-body">
         <div className="price-line">
           <strong>{renderPrice(item, currencyMode)}</strong>
-          <span>{currencyMode === "VES" ? "Precio BCV" : "Precio base USD"}</span>
+          <span>{priceLabel}</span>
         </div>
 
         <div className="product-meta">
@@ -281,7 +387,7 @@ function InventoryCard({ item, currencyMode, onAdd, onConsult }) {
   );
 }
 
-function CartPanel({ currencyMode, exchangeRate }) {
+function CartPanel({ currencyMode, exchangeRates, paymentLinks, whatsappUrl }) {
   const dispatch = useDispatch();
   const items = useSelector(selectCartItems);
   const itemCount = useSelector(selectCartCount);
@@ -291,26 +397,26 @@ function CartPanel({ currencyMode, exchangeRate }) {
   const taxUsd = subtotalUsd * TAX_RATE;
   const shippingUsd = subtotalUsd > 100 || subtotalUsd === 0 ? 0 : SHIPPING_USD;
   const totalUsd = subtotalUsd + taxUsd + shippingUsd;
-  const subtotalDisplay = currencyMode === "VES" ? subtotalUsd * exchangeRate : subtotalUsd;
-  const taxDisplay = currencyMode === "VES" ? taxUsd * exchangeRate : taxUsd;
-  const shippingDisplay = currencyMode === "VES" ? shippingUsd * exchangeRate : shippingUsd;
-  const totalDisplay = currencyMode === "VES" ? totalUsd * exchangeRate : totalUsd;
-  const currencyCode = currencyMode === "VES" ? "VES" : "USD";
+  const subtotalDisplay = convertLineTotal(subtotalUsd, currencyMode, exchangeRates);
+  const taxDisplay = convertLineTotal(taxUsd, currencyMode, exchangeRates);
+  const shippingDisplay = convertLineTotal(shippingUsd, currencyMode, exchangeRates);
+  const totalDisplay = convertLineTotal(totalUsd, currencyMode, exchangeRates);
+  const currencyCode = currencyMode;
   const checkoutMessage = buildCheckoutMessage({
     items,
     currencyCode,
-    exchangeRate,
+    exchangeRate: exchangeRates,
     subtotalDisplay,
     totalDisplay,
   });
-  const whatsappCheckoutUrl = buildWhatsAppUrl(checkoutMessage);
+  const whatsappCheckoutUrl = buildWhatsAppUrl(whatsappUrl, checkoutMessage);
 
   return (
     <aside className="cart-panel">
       <h2>Carrito Redux</h2>
       <p>
         {itemCount} producto(s) · impuestos y envío calculados en tiempo real con tasa{" "}
-        {currencyMode === "VES" ? "BCV" : "USD"}.
+        {currencyMode === "VES" ? "BCV" : currencyMode}.
       </p>
 
       {items.length === 0 ? (
@@ -321,7 +427,7 @@ function CartPanel({ currencyMode, exchangeRate }) {
         <>
           <div className="cart-list">
             {items.map((item) => {
-              const lineTotal = convertLineTotal(item.lineTotal, currencyCode, exchangeRate);
+              const lineTotal = convertLineTotal(item.lineTotal, currencyCode, exchangeRates);
 
               return (
                 <div className="cart-item" key={item.sku}>
@@ -416,14 +522,14 @@ function CartPanel({ currencyMode, exchangeRate }) {
             <article className="checkout-card">
               <strong>Mercado Libre</strong>
               <p>Completa la compra desde la vitrina pública cuando el cliente prefiera marketplace.</p>
-              <a href={MERCADOLIBRE_URL} rel="noreferrer" target="_blank">
+                <a href={paymentLinks.mercadoLibreUrl} rel="noreferrer" target="_blank">
                 Ir a Mercado Libre
               </a>
             </article>
             <article className="checkout-card">
               <strong>PayPal</strong>
               <p>Alternativa rápida para ventas internacionales o clientes que pagan en USD.</p>
-              <a href={PAYPAL_URL} rel="noreferrer" target="_blank">
+                <a href={paymentLinks.paypalUrl} rel="noreferrer" target="_blank">
                 Ir a PayPal
               </a>
             </article>
@@ -437,7 +543,7 @@ function CartPanel({ currencyMode, exchangeRate }) {
                 <a href={whatsappCheckoutUrl} rel="noreferrer" target="_blank">
                   Coordinar Zelle
                 </a>
-                <a href={BINANCE_PAY_URL} rel="noreferrer" target="_blank">
+                  <a href={paymentLinks.binancePayUrl} rel="noreferrer" target="_blank">
                   Abrir Binance Pay
                 </a>
               </div>
@@ -451,7 +557,8 @@ function CartPanel({ currencyMode, exchangeRate }) {
 
 export default function Storefront() {
   const dispatch = useDispatch();
-  const { items, exchangeRate, rateSource, isLoading, error } = useInventory();
+  const { items, exchangeRates, rateSource, ratesLastUpdated, isLoading, error } = useInventory();
+  const runtimeConfig = usePublicRuntimeConfig();
   const { themeMode, setThemeMode } = useThemePreference();
   const [query, setQuery] = useState("");
   const [brand, setBrand] = useState("all");
@@ -459,8 +566,31 @@ export default function Storefront() {
   const [vehicle, setVehicle] = useState("");
   const [currencyMode, setCurrencyMode] = useState("USD");
 
+  const whatsappUrl = runtimeConfig?.links?.whatsappUrl || DEFAULT_WHATSAPP_URL;
+  const instagramUrl = runtimeConfig?.links?.instagramUrl || DEFAULT_INSTAGRAM_URL;
+  const mercadoLibreUrl =
+    runtimeConfig?.links?.mercadoLibreUrl || DEFAULT_MERCADOLIBRE_URL;
+  const paypalUrl = runtimeConfig?.links?.paypalUrl || DEFAULT_PAYPAL_URL;
+  const binancePayUrl = runtimeConfig?.links?.binancePayUrl || DEFAULT_BINANCE_PAY_URL;
+  const chatbotPublicUrl = runtimeConfig?.chatbot?.publicUrl || DEFAULT_HF_SPACE_URL;
+  const paypalCallbackUrl =
+    runtimeConfig?.payments?.paypal?.ipnCallbackUrl || `${BACKEND_BASE_URL}/api/payments/paypal`;
+  const pagomovilCallbackUrl =
+    runtimeConfig?.payments?.pagomovil?.callbackUrl || `${BACKEND_BASE_URL}/api/payments/pagomovil`;
+  const instagramSearchUrl = buildInstagramSearchUrl(
+    instagramUrl,
+    [query, vehicle, brand !== "all" ? brand : ""].filter(Boolean).join(" ")
+  );
+
   function scrollToChatbot() {
     document.getElementById("ai-chatbot-section")?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }
+
+  function scrollToCatalog() {
+    document.getElementById("catalog-section")?.scrollIntoView({
       behavior: "smooth",
       block: "start",
     });
@@ -476,7 +606,28 @@ export default function Storefront() {
     window.dispatchEvent(new CustomEvent("tb-ai-prefill", { detail: { prompt } }));
   }
 
+  function handleSearchConsult() {
+    const prompt = [query, vehicle, brand !== "all" ? brand : "", category !== "all" ? category : ""]
+      .filter(Boolean)
+      .join(" ")
+      .trim();
+
+    scrollToChatbot();
+    if (!prompt) {
+      return;
+    }
+
+    window.dispatchEvent(
+      new CustomEvent("tb-ai-prefill", {
+        detail: {
+          prompt: `Ayúdame a buscar este repuesto y validar compatibilidad: ${prompt}`,
+        },
+      })
+    );
+  }
+
   const floatingWhatsAppUrl = buildWhatsAppUrl(
+    whatsappUrl,
     "Hola, necesito ayuda con catálogo, pagos o disponibilidad en Turbobujias Pro."
   );
 
@@ -568,42 +719,38 @@ export default function Storefront() {
                   className="brand-icon"
                   height={84}
                   priority
-                  src="/branding/turbobujias-icon.svg"
+                    src="/branding/turbobujias-icon.jpg"
                   width={84}
                 />
               </div>
-              <div>
+                <div className="brand-logo-shell">
                 <Image
                   alt="Logotipo de Turbobujias"
                   className="brand-logo"
-                  height={72}
+                    height={120}
                   priority
-                  src="/branding/turbobujias-logo.svg"
-                  width={230}
+                    src="/branding/turbobujias-logo.webp"
+                    width={320}
                 />
               </div>
             </div>
             <h1>Turbobujias Pro</h1>
             <p>
               E-commerce automotriz con búsqueda por SKU/UPC, filtros por aplicación,
-              carrito Redux y precios en USD/VES para bujías, calentadores y repuestos diésel.
+                carrito Redux y precios en USD/EUR/VES para bujías, calentadores y repuestos diésel.
             </p>
 
             <div className="button-row">
-              <button
-                className={`button-chip ${currencyMode === "USD" ? "active" : ""}`}
-                onClick={() => setCurrencyMode("USD")}
-                type="button"
-              >
-                Ver en USD
-              </button>
-              <button
-                className={`button-chip ${currencyMode === "VES" ? "active" : ""}`}
-                onClick={() => setCurrencyMode("VES")}
-                type="button"
-              >
-                Ver en VES
-              </button>
+                {CURRENCY_OPTIONS.map((option) => (
+                  <button
+                    className={`button-chip ${currencyMode === option.value ? "active" : ""}`}
+                    key={option.value}
+                    onClick={() => setCurrencyMode(option.value)}
+                    type="button"
+                  >
+                    {option.label}
+                  </button>
+                ))}
                 <button className="button-secondary" onClick={scrollToChatbot} type="button">
                 Abrir chatbot IA
                 </button>
@@ -634,8 +781,12 @@ export default function Storefront() {
               <span>Calentadores diésel</span>
             </div>
             <div className="stat-card">
-              <strong>{exchangeRate || "—"}</strong>
-              <span>Tasa {rateSource}</span>
+                <strong>{formatRateValue(exchangeRates.usd_ves)}</strong>
+                <span>USD → VES · {rateSource}</span>
+              </div>
+              <div className="stat-card">
+                <strong>{formatRateValue(exchangeRates.eur_ves)}</strong>
+                <span>EUR → VES · actualiza diario</span>
             </div>
           </div>
         </div>
@@ -651,10 +802,15 @@ export default function Storefront() {
           </article>
           <article className="contact-card instagram-card">
             <strong>Instagram comercial</strong>
-            <p>Abre el perfil en ventana secundaria para mostrar catálogo, historias y promociones.</p>
-            <a href={INSTAGRAM_URL} rel="noreferrer" target="_blank">
-              Abrir Instagram
-            </a>
+            <p>Abre el perfil o lanza una búsqueda rápida por SKU, marca o aplicación usando tu consulta actual.</p>
+            <div className="actions-row">
+              <a href={instagramUrl} rel="noreferrer" target="_blank">
+                Abrir Instagram
+              </a>
+              <a href={instagramSearchUrl} rel="noreferrer" target="_blank">
+                Buscar esta consulta
+              </a>
+            </div>
           </article>
           <article className="contact-card theme-card">
             <strong>Landing moderna y adaptable</strong>
@@ -725,13 +881,27 @@ export default function Storefront() {
 
           <div className="field-group">
             <label htmlFor="search">Buscar por SKU, UPC o aplicación</label>
-            <input
-              id="search"
-              onChange={(event) => setQuery(event.target.value)}
-              placeholder="Ej. NGK-BKR5E, 070185924508, Corolla 1.8..."
-              value={query}
-            />
-          </div>
+              <div className="search-input-row">
+                <input
+                  id="search"
+                  onChange={(event) => setQuery(event.target.value)}
+                  placeholder="Ej. NGK-BKR5E, 070185924508, Corolla 1.8..."
+                  value={query}
+                />
+                <button className="button-primary search-submit-button" onClick={scrollToCatalog} type="button">
+                  Buscar
+                </button>
+              </div>
+            </div>
+
+            <div className="actions-row search-actions-row">
+              <a className="button-secondary" href={instagramSearchUrl} rel="noreferrer" target="_blank">
+                Buscar en Instagram
+              </a>
+              <button className="button-secondary" onClick={handleSearchConsult} type="button">
+                Consultar esta búsqueda con IA
+              </button>
+            </div>
 
           {suggestions.length > 0 ? (
             <ul className="autocomplete">
@@ -800,7 +970,12 @@ export default function Storefront() {
           </div>
         </div>
 
-        <CartPanel currencyMode={currencyMode} exchangeRate={exchangeRate} />
+          <CartPanel
+            currencyMode={currencyMode}
+            exchangeRates={exchangeRates}
+            paymentLinks={{ mercadoLibreUrl, paypalUrl, binancePayUrl }}
+            whatsappUrl={whatsappUrl}
+          />
         </section>
 
         <section className="support-grid" style={{ marginTop: "1.5rem" }}>
@@ -826,10 +1001,11 @@ export default function Storefront() {
           <QrScanner onDetected={setQuery} />
         </div>
           <div className="support-card">
-            <h3>Entorno local, IP local y producción</h3>
+            <h3>Tasa BCV, entorno local e integración</h3>
             <p>
               La app puede apuntar a localhost, a la IP local del backend para pruebas móviles o a
-              una URL pública en producción mediante variables de entorno.
+              una URL pública en producción mediante variables de entorno y mostrar tasas BCV en
+              USD, EUR y VES con refresh diario.
             </p>
             <ul className="feature-list">
               <li>
@@ -837,6 +1013,27 @@ export default function Storefront() {
               </li>
               <li>Móvil: usa la IP LAN del backend para Android/iOS.</li>
               <li>Producción: publica API, chatbot y enlaces de pago por variables de entorno.</li>
+              <li>
+                USD → VES: <code>{formatRateValue(exchangeRates.usd_ves)}</code>.
+              </li>
+              <li>
+                EUR → VES: <code>{formatRateValue(exchangeRates.eur_ves)}</code>.
+              </li>
+              <li>
+                USD → EUR: <code>{formatRateValue(exchangeRates.usd_eur)}</code>.
+              </li>
+              <li>
+                Última actualización: <code>{formatRelativeDate(ratesLastUpdated)}</code>.
+              </li>
+              <li>
+                Chatbot público actual: <code>{chatbotPublicUrl}</code>.
+              </li>
+              <li>
+                Callback PayPal IPN: <code>{paypalCallbackUrl}</code>.
+              </li>
+              <li>
+                Callback Pago Móvil: <code>{pagomovilCallbackUrl}</code>.
+              </li>
             </ul>
           </div>
         </section>
@@ -845,7 +1042,7 @@ export default function Storefront() {
           <AiChatbot />
         </section>
 
-        <section style={{ marginTop: "1.5rem" }}>
+        <section id="catalog-section" style={{ marginTop: "1.5rem" }}>
         <div className="panel">
           <h2>Catálogo disponible</h2>
           <p>
@@ -899,7 +1096,7 @@ export default function Storefront() {
         <a
           aria-label="Abrir Instagram"
           className="floating-button instagram"
-          href={INSTAGRAM_URL}
+          href={instagramUrl}
           rel="noreferrer"
           target="_blank"
         >
