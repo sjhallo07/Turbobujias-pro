@@ -129,8 +129,17 @@ export async function POST(request) {
             throw new Error(upstreamDetail);
         }
 
+        const sanitizedResult =
+            result && typeof result === "object"
+                ? result
+                : {
+                      reply: String(result || ""),
+                      sources: [],
+                      history: Array.isArray(history) ? history : [],
+                  };
+
         return NextResponse.json({
-            data: sanitizedResult ?? null,
+            data: sanitizedResult,
         });
     } catch (error) {
         const rawMessage = error instanceof Error ? error.message : String(error);
