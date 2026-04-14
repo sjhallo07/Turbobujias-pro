@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import AiChatbot from "./ai-chatbot";
 import QrScanner from "./qr-scanner";
@@ -15,6 +15,89 @@ import {
   selectCartItems,
   selectCartTotals,
 } from "../lib/cartSlice";
+
+// SVG Icons
+function WhatsAppIcon({ className = "" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+  );
+}
+
+function InstagramIcon({ className = "" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/>
+    </svg>
+  );
+}
+
+function CartIcon({ className = "" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
+      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
+    </svg>
+  );
+}
+
+function CloseIcon({ className = "" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+    </svg>
+  );
+}
+
+function MenuIcon({ className = "" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/>
+    </svg>
+  );
+}
+
+function SparkIcon({ className = "" }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor">
+      <path d="M12 2L9 12H2L7 17L5 22L12 17L19 22L17 17L22 12H15L12 2Z"/>
+    </svg>
+  );
+}
+
+// Modal Component
+function Modal({ isOpen, onClose, title, children, footer }) {
+  useEffect(() => {
+    if (isOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+        <div className="modal-header">
+          <h2>{title}</h2>
+          <button className="modal-close" onClick={onClose} aria-label="Cerrar">
+            <CloseIcon />
+          </button>
+        </div>
+        <div className="modal-body">
+          {children}
+        </div>
+        {footer && <div className="modal-footer">{footer}</div>}
+      </div>
+    </div>
+  );
+}
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 const DEFAULT_HF_SPACE_URL =
@@ -392,6 +475,7 @@ function CartPanel({ currencyMode, exchangeRates, paymentLinks, whatsappUrl }) {
   const items = useSelector(selectCartItems);
   const itemCount = useSelector(selectCartCount);
   const totals = useSelector(selectCartTotals);
+  const [isCheckoutModalOpen, setIsCheckoutModalOpen] = useState(false);
 
   const subtotalUsd = totals.subtotal;
   const taxUsd = subtotalUsd * TAX_RATE;
@@ -411,12 +495,18 @@ function CartPanel({ currencyMode, exchangeRates, paymentLinks, whatsappUrl }) {
   });
   const whatsappCheckoutUrl = buildWhatsAppUrl(whatsappUrl, checkoutMessage);
 
+  const handleOpenCheckout = useCallback(() => {
+    if (items.length > 0) {
+      setIsCheckoutModalOpen(true);
+    }
+  }, [items.length]);
+
   return (
+    <>
     <aside className="cart-panel">
-      <h2>Carrito Redux</h2>
+      <h2><CartIcon className="contact-icon" /> Carrito</h2>
       <p>
-        {itemCount} producto(s) · impuestos y envío calculados en tiempo real con tasa{" "}
-        {currencyMode === "VES" ? "BCV" : currencyMode}.
+        {itemCount} producto(s) · IVA 16% y envío calculados automáticamente.
       </p>
 
       {items.length === 0 ? (
@@ -491,14 +581,13 @@ function CartPanel({ currencyMode, exchangeRates, paymentLinks, whatsappUrl }) {
           </div>
 
           <div className="actions-row">
-            <a
+            <button
               className="button-primary"
-              href={whatsappCheckoutUrl}
-              rel="noreferrer"
-              target="_blank"
+              onClick={handleOpenCheckout}
+              type="button"
             >
-              Checkout por WhatsApp
-            </a>
+              Finalizar Compra
+            </button>
             <button
               className="button-secondary"
               onClick={() => dispatch(clearCart())}
@@ -510,27 +599,26 @@ function CartPanel({ currencyMode, exchangeRates, paymentLinks, whatsappUrl }) {
 
           <div className="checkout-grid">
             <article className="checkout-card checkout-card-primary">
-              <strong>Checkout web asistido</strong>
+              <strong><WhatsAppIcon className="contact-icon" /> WhatsApp</strong>
               <p>
-                Envía el resumen del carrito en una ventana secundaria y confirma entrega, pago y
-                datos del cliente por WhatsApp.
+                Confirma tu pedido directamente con un asesor de ventas.
               </p>
               <a href={whatsappCheckoutUrl} rel="noreferrer" target="_blank">
-                Abrir checkout asistido
+                Iniciar chat
               </a>
             </article>
             <article className="checkout-card">
               <strong>Mercado Libre</strong>
-              <p>Completa la compra desde la vitrina pública cuando el cliente prefiera marketplace.</p>
+              <p>Pago seguro con protección al comprador.</p>
                 <a href={paymentLinks.mercadoLibreUrl} rel="noreferrer" target="_blank">
-                Ir a Mercado Libre
+                Ir a ML
               </a>
             </article>
             <article className="checkout-card">
               <strong>PayPal</strong>
-              <p>Alternativa rápida para ventas internacionales o clientes que pagan en USD.</p>
+              <p>Pago internacional en USD.</p>
                 <a href={paymentLinks.paypalUrl} rel="noreferrer" target="_blank">
-                Ir a PayPal
+                Abrir PayPal
               </a>
             </article>
             <article className="checkout-card">
@@ -552,6 +640,83 @@ function CartPanel({ currencyMode, exchangeRates, paymentLinks, whatsappUrl }) {
         </>
       )}
     </aside>
+
+    {/* Checkout Modal */}
+    <Modal
+      isOpen={isCheckoutModalOpen}
+      onClose={() => setIsCheckoutModalOpen(false)}
+      title="Finalizar Compra"
+      footer={
+        <button className="button-secondary" onClick={() => setIsCheckoutModalOpen(false)}>
+          Cerrar
+        </button>
+      }
+    >
+      <div className="cart-modal-summary">
+        {items.map((item) => (
+          <div className="cart-modal-item" key={item.sku}>
+            <div>
+              <strong>{item.brand} {item.model}</strong>
+              <div className="muted">{item.sku} x {item.quantity}</div>
+            </div>
+            <strong>{formatCurrency(convertLineTotal(item.lineTotal, currencyCode, exchangeRates), currencyCode)}</strong>
+          </div>
+        ))}
+        
+        <div className="cart-modal-totals">
+          <div className="cart-modal-total-line">
+            <span>Subtotal</span>
+            <span>{formatCurrency(subtotalDisplay, currencyCode)}</span>
+          </div>
+          <div className="cart-modal-total-line">
+            <span>IVA (16%)</span>
+            <span>{formatCurrency(taxDisplay, currencyCode)}</span>
+          </div>
+          <div className="cart-modal-total-line">
+            <span>Envío</span>
+            <span>{shippingDisplay > 0 ? formatCurrency(shippingDisplay, currencyCode) : 'Gratis'}</span>
+          </div>
+          <div className="cart-modal-total-line final">
+            <span>Total</span>
+            <span>{formatCurrency(totalDisplay, currencyCode)}</span>
+          </div>
+        </div>
+
+        <div className="payment-options">
+          <a className="payment-option" href={whatsappCheckoutUrl} rel="noreferrer" target="_blank" onClick={() => setIsCheckoutModalOpen(false)}>
+            <div className="payment-option-icon" style={{ background: 'linear-gradient(135deg, #25d366, #128c7e)', color: 'white' }}>
+              <WhatsAppIcon />
+            </div>
+            <div className="payment-option-content">
+              <strong>WhatsApp Checkout</strong>
+              <span>Confirma tu pedido con un asesor</span>
+            </div>
+          </a>
+          <a className="payment-option" href={paymentLinks.mercadoLibreUrl} rel="noreferrer" target="_blank">
+            <div className="payment-option-icon">ML</div>
+            <div className="payment-option-content">
+              <strong>Mercado Libre</strong>
+              <span>Pago seguro con protección al comprador</span>
+            </div>
+          </a>
+          <a className="payment-option" href={paymentLinks.paypalUrl} rel="noreferrer" target="_blank">
+            <div className="payment-option-icon">PP</div>
+            <div className="payment-option-content">
+              <strong>PayPal</strong>
+              <span>Pago internacional en USD</span>
+            </div>
+          </a>
+          <a className="payment-option" href={paymentLinks.binancePayUrl} rel="noreferrer" target="_blank">
+            <div className="payment-option-icon">BP</div>
+            <div className="payment-option-content">
+              <strong>Binance Pay / Zelle</strong>
+              <span>Cripto o transferencia directa</span>
+            </div>
+          </a>
+        </div>
+      </div>
+    </Modal>
+    </>
   );
 }
 
@@ -794,29 +959,28 @@ export default function Storefront() {
 
         <section className="contact-strip">
           <article className="contact-card whatsapp-card">
-            <strong>WhatsApp ventas</strong>
-            <p>Botón flotante y acceso directo para cotizaciones, Zelle y seguimiento postventa.</p>
+            <strong><WhatsAppIcon className="contact-icon" /> WhatsApp Ventas</strong>
+            <p>Cotizaciones al instante, coordina Zelle y seguimiento postventa directo.</p>
             <a href={floatingWhatsAppUrl} rel="noreferrer" target="_blank">
               Escribir por WhatsApp
             </a>
           </article>
           <article className="contact-card instagram-card">
-            <strong>Instagram comercial</strong>
-            <p>Abre el perfil o lanza una búsqueda rápida por SKU, marca o aplicación usando tu consulta actual.</p>
+            <strong><InstagramIcon className="contact-icon" /> Instagram</strong>
+            <p>Catálogo visual, promociones y búsqueda rápida por SKU o aplicación.</p>
             <div className="actions-row">
               <a href={instagramUrl} rel="noreferrer" target="_blank">
-                Abrir Instagram
+                Ver perfil
               </a>
               <a href={instagramSearchUrl} rel="noreferrer" target="_blank">
-                Buscar esta consulta
+                Buscar consulta
               </a>
             </div>
           </article>
           <article className="contact-card theme-card">
-            <strong>Landing moderna y adaptable</strong>
+            <strong><SparkIcon className="contact-icon" /> Experiencia Premium</strong>
             <p>
-              Tema claro/oscuro/sistema, diseño responsive para Android/iOS y acciones rápidas de
-              contacto y checkout.
+              Tema adaptable claro/oscuro, optimizado para móvil y checkout asistido.
             </p>
           </article>
         </section>
@@ -1091,7 +1255,7 @@ export default function Storefront() {
           rel="noreferrer"
           target="_blank"
         >
-          WA
+          <WhatsAppIcon />
         </a>
         <a
           aria-label="Abrir Instagram"
@@ -1100,9 +1264,33 @@ export default function Storefront() {
           rel="noreferrer"
           target="_blank"
         >
-          IG
+          <InstagramIcon />
         </a>
       </div>
+
+      {/* Mobile Bottom Navigation */}
+      <nav className="mobile-bottom-nav">
+        <div className="mobile-bottom-nav-inner">
+          <button className="mobile-nav-button" onClick={scrollToCatalog} type="button">
+            <SparkIcon />
+            <span>Productos</span>
+          </button>
+          <a className="mobile-nav-button" href={floatingWhatsAppUrl} rel="noreferrer" target="_blank">
+            <WhatsAppIcon />
+            <span>WhatsApp</span>
+          </a>
+          <button className="mobile-nav-button" onClick={scrollToChatbot} type="button">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span>IA Chat</span>
+          </button>
+          <a className="mobile-nav-button" href={instagramUrl} rel="noreferrer" target="_blank">
+            <InstagramIcon />
+            <span>Instagram</span>
+          </a>
+        </div>
+      </nav>
     </>
   );
 }
