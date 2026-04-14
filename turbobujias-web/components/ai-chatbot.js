@@ -35,6 +35,16 @@ function normalizeMediaPayload(result) {
     return null;
 }
 
+function formatFileSize(bytes) {
+    if (!Number.isFinite(bytes) || bytes <= 0) {
+        return "0 KB";
+    }
+    if (bytes >= 1024 * 1024) {
+        return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+    }
+    return `${Math.ceil(bytes / 1024)} KB`;
+}
+
 export default function AiChatbot() {
     const endpointRef = useRef("/api/ai-chat");
     const [messages, setMessages] = useState([
@@ -84,7 +94,8 @@ export default function AiChatbot() {
         }
 
         const recognition = new SpeechRecognition();
-        recognition.lang = "es-VE";
+        const browserLanguage = navigator.language || "";
+        recognition.lang = browserLanguage || "es-VE";
         recognition.interimResults = false;
         recognition.maxAlternatives = 1;
 
@@ -376,7 +387,7 @@ export default function AiChatbot() {
                         </button>
                         {selectedMedia ? (
                             <span className="pill">
-                                {selectedMedia.name} ({Math.ceil(selectedMedia.size / 1024)} KB)
+                                {selectedMedia.name} ({formatFileSize(selectedMedia.size)})
                             </span>
                         ) : null}
                     </div>

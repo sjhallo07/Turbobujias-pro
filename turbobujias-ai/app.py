@@ -152,6 +152,7 @@ GEMINI_TOP_P = env_float("GEMINI_TOP_P", 0.1)
 GEMINI_MAX_OUTPUT_TOKENS = env_int("GEMINI_MAX_OUTPUT_TOKENS", 384)
 MEDIA_OCR_MODEL_ID = os.environ.get("MEDIA_OCR_MODEL_ID", "microsoft/trocr-base-printed").strip()
 MAX_MEDIA_UPLOAD_BYTES = env_int("MAX_MEDIA_UPLOAD_BYTES", 8 * 1024 * 1024)
+MAX_OCR_TEXT_LENGTH = env_int("MAX_OCR_TEXT_LENGTH", 1800)
 WEB_SEARCH_HOOK_ENABLED = env_bool("WEB_SEARCH_HOOK_ENABLED", False)
 WEB_SEARCH_PROVIDER_LABEL = os.environ.get("WEB_SEARCH_PROVIDER_LABEL", "future_autoparts_web_lookup").strip()
 
@@ -494,7 +495,9 @@ def apply_evidence_header(query: str, answer: str, sources: list[str]) -> str:
 
 def extract_precision_fields(raw_text: str) -> dict[str, list[str]]:
     text = raw_text.upper()
-    sku_candidates = sorted(set(re.findall(r"\b[A-Z0-9]{2,}(?:-[A-Z0-9]{2,})+\b", text)))
+    sku_candidates = sorted(
+        set(re.findall(r"\b(?=[A-Z0-9-]{4,}\b)(?=[A-Z0-9-]*[A-Z])(?=[A-Z0-9-]*(?:\d|-))[A-Z0-9]+(?:-[A-Z0-9]+)*\b", text))
+    )
     upc_candidates = sorted(set(re.findall(r"\b\d{8,14}\b", raw_text)))
     thread_candidates = sorted(set(re.findall(r"\bM?\d{1,2}(?:\.\d)?X\d{1,2}(?:\.\d)?\b", text)))
     voltage_candidates = sorted(set(re.findall(r"\b\d{1,2}(?:\.\d)?\s?V\b", text)))
@@ -562,15 +565,15 @@ def build_media_assisted_query(fields: dict[str, list[str]], user_question: str 
     return f"Validar compatibilidad y equivalencias para {prefix}."
 
 
-def extract_text_from_image_bytes(image_bytes: bytes) -> str:
+def extract_text_from_image_bytes(image_bytes: bytes) -> tuple[str, bool]:
     if huggingface_client is None:
-        return ""
+        return "", False
 
     try:
         response = huggingface_client.image_to_text(image_bytes, model=MEDIA_OCR_MODEL_ID)
     except Exception as exc:
         _log.warning("OCR extraction failed: %s", exc)
-        return ""
+        return "", True
 
     if isinstance(response, list):
         parts = []
@@ -579,12 +582,12 @@ def extract_text_from_image_bytes(image_bytes: bytes) -> str:
                 parts.append(str(item.get("generated_text", "")).strip())
             else:
                 parts.append(str(item).strip())
-        return " ".join(part for part in parts if part).strip()
+        return " ".join(part for part in parts if part).strip(), False
 
     if isinstance(response, dict):
-        return str(response.get("generated_text", "")).strip()
+        return str(response.get("generated_text", "")).strip(), False
 
-    return str(response).strip()
+    return str(response).strip(), False
 
 
 def get_web_search_hook_status(query: str) -> dict[str, str | bool]:
@@ -998,7 +1001,7 @@ async def analyze_media_endpoint(
             filename=filename,
             status="video_not_supported_yet",
             assistant_hint=(
-                "Recibí tu video y guardé metadatos básicos para una futura etapa de reconocimiento. "
+                "Recibí tu video, pero todavía no está habilitado el reconocimiento de video en esta versión. "
                 "Por ahora, sube una foto nítida de etiqueta/SKU/UPC para búsqueda precisa."
             ),
             assisted_query=question.strip(),
@@ -1014,8 +1017,8 @@ async def analyze_media_endpoint(
             web_search_hook=get_web_search_hook_status(question),
         )
 
-    ocr_text = extract_text_from_image_bytes(payload)
-    searchable_text = f"{filename}\n{ocr_text}".strip()
+    ocr_text, ocr_failed = extract_text_from_image_bytes(payload)
+    searchable_text = ocr_text.strip()
     extracted_fields = extract_precision_fields(searchable_text)
     matches = find_catalog_matches_from_fields(extracted_fields)
     assisted_query = build_media_assisted_query(extracted_fields, question)
@@ -1032,6 +1035,12 @@ async def analyze_media_endpoint(
             "Puedo intentar equivalencias si me confirmas marca, modelo, motor, año y combustible."
         )
         status = "extracted_without_exact_match"
+    elif ocr_failed:
+        hint = (
+            "No pude completar OCR en este momento. "
+            "Intenta de nuevo o sube una foto más nítida de etiqueta/SKU/UPC."
+        )
+        status = "ocr_temporarily_unavailable"
     else:
         hint = (
             "No pude extraer texto suficiente de la imagen. "
@@ -1054,7 +1063,7 @@ async def analyze_media_endpoint(
         media_type=media_type,
         filename=filename,
         status=status,
-        extracted_text=ocr_text[:1800],
+        extracted_text=ocr_text[:MAX_OCR_TEXT_LENGTH],
         extracted_fields=extracted_fields,
         matches=response_matches,
         assisted_query=assisted_query,
