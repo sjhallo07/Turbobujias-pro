@@ -721,6 +721,11 @@ button {
   gap: 0.9rem;
 }
 
+.ai-chatbot-input-tools {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 .ai-chatbot-error {
   color: var(--danger) !important;
 }

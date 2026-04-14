@@ -9,6 +9,8 @@ const SPACE_URL =
     "https://sjhallo07-turbobujias-ai.hf.space";
 const CHAT_API_NAME =
     process.env.HF_CHAT_API_NAME || process.env.NEXT_PUBLIC_HF_CHAT_API_NAME || "/chat";
+const MEDIA_API_NAME =
+    process.env.HF_MEDIA_API_NAME || process.env.NEXT_PUBLIC_HF_MEDIA_API_NAME || "/analyze-media";
 const HF_TOKEN = process.env.HF_TOKEN || "";
 const OPENAPI_PATH = "/openapi.json";
 
@@ -50,7 +52,9 @@ function buildSpaceEndpointMetadata() {
         apiBaseUrl,
         openApiUrl: `${SPACE_URL}${OPENAPI_PATH}`,
         chatUrl: `${SPACE_URL}${CHAT_API_NAME}`,
+        mediaUrl: `${SPACE_URL}${MEDIA_API_NAME}`,
         localProxyUrl: "/api/ai-chat",
+        localMediaProxyUrl: "/api/ai-chat/media",
         localOpenApiProxyUrl: "/api/ai-chat/openapi",
     };
 }

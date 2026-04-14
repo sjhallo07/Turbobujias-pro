@@ -12,12 +12,16 @@ From `turbobujias-web/.env.example` and the Next.js API route:
   - Server-side Space base URL used by `/api/ai-chat`
 - `HF_CHAT_API_NAME`
   - Defaults to `/chat`
+- `HF_MEDIA_API_NAME`
+  - Defaults to `/analyze-media` for image/video-assisted catalog extraction
 - `HF_TOKEN`
   - Optional bearer token for protected Spaces
 - `NEXT_PUBLIC_HF_SPACE_URL`
   - Browser-visible fallback when `HF_SPACE_URL` is not present
 - `NEXT_PUBLIC_HF_CHAT_API_NAME`
   - Browser-visible fallback for the chat path
+- `NEXT_PUBLIC_HF_MEDIA_API_NAME`
+  - Browser-visible fallback for media analysis path
 
 ### Space-side variables
 
@@ -34,6 +38,10 @@ From `turbobujias-ai/.env.example`:
 - `HF_TOKEN`
 - `HF_MODEL_REPO_ID`
 - `PORT`
+- `MEDIA_OCR_MODEL_ID`
+- `MAX_MEDIA_UPLOAD_BYTES`
+- `WEB_SEARCH_HOOK_ENABLED`
+- `WEB_SEARCH_PROVIDER_LABEL`
 
 ## Runtime endpoints
 
@@ -43,6 +51,8 @@ From `turbobujias-ai/.env.example`:
   - Returns current endpoint metadata and the upstream OpenAPI payload.
 - `POST /api/ai-chat`
   - Forwards `{ message, history }` to the Space chat endpoint.
+- `POST /api/ai-chat/media`
+  - Forwards multipart media (`file`, optional `question`) to the Space media analysis endpoint.
 - `GET /api/ai-chat/openapi`
   - Returns the Space OpenAPI JSON.
 
@@ -66,6 +76,9 @@ From `turbobujias-ai/.env.example`:
     ```
 - `GET <HF_SPACE_URL>/openapi.json`
   - Used by the proxy for metadata inspection.
+- `POST <HF_SPACE_URL>/analyze-media`
+  - Accepts image/video uploads.
+  - Returns extracted OCR-like fields (SKU/UPC/brand/thread/voltage), catalog candidates, and an assisted query for chat.
 
 ## Callback wiring inside the storefront
 
@@ -112,6 +125,30 @@ The Next.js proxy sanitizes upstream errors before returning them to the browser
 - Rate-limit and policy text is replaced by a safe retry message.
 - Raw upstream provider text is only logged server-side.
 - The UI shows a friendly fallback assistant response if the proxy call fails.
+
+## Deterministic and database-first policy
+
+- The assistant prompt is specialized for autoparts e-commerce: bujías, calentadores, diésel, fitment and cross-reference.
+- Generation for grounded recommendation paths is deterministic (`temperature = 0` / low `top_p` equivalents).
+- Catalog/database evidence is the source of truth. Web-derived hints (future hook) must never override validated local catalog data.
+- Responses should label evidence level explicitly:
+  - `Coincidencia exacta`
+  - `Coincidencia probable`
+  - `Evidencia insuficiente`
+- If evidence is insufficient, the assistant asks only minimum missing details: marca, modelo, motor, año y combustible.
+
+## Storefront multimodal UX
+
+- Voice input is client-side using browser Web Speech API when available.
+- If speech recognition is unavailable, the UI displays a graceful fallback notice.
+- Image upload path runs media analysis to extract searchable fields and prefill an assisted query.
+- Video upload is accepted as a future extensibility point and currently returns `video_not_supported_yet` with guidance.
+
+## Future compatibility web-search hook
+
+- API responses now include a `web_search_hook` status payload (`enabled`, `provider`, `policy`, `query_preview`).
+- This is an architectural hook for future compatibility/reference lookups on the web.
+- Policy remains strict: local validated catalog data is always primary.
 
 ## Deployment checklist
 

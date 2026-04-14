@@ -27,6 +27,14 @@ function normalizeChatPayload(result) {
     };
 }
 
+function normalizeMediaPayload(result) {
+    const raw = result?.data;
+    if (raw && typeof raw === "object" && !Array.isArray(raw)) {
+        return raw;
+    }
+    return null;
+}
+
 export default function AiChatbot() {
     const endpointRef = useRef("/api/ai-chat");
     const [messages, setMessages] = useState([
@@ -41,8 +49,15 @@ export default function AiChatbot() {
     const [input, setInput] = useState("");
     const [isConnecting, setIsConnecting] = useState(false);
     const [isSending, setIsSending] = useState(false);
+    const [isListening, setIsListening] = useState(false);
+    const [isSpeechAvailable, setIsSpeechAvailable] = useState(false);
+    const [speechError, setSpeechError] = useState("");
+    const [selectedMedia, setSelectedMedia] = useState(null);
+    const [isAnalyzingMedia, setIsAnalyzingMedia] = useState(false);
+    const [mediaResult, setMediaResult] = useState(null);
     const [status, setStatus] = useState("Listo para ayudarte.");
     const [error, setError] = useState("");
+    const speechRef = useRef(null);
 
     const canSend = input.trim().length > 0 && !isSending;
     const helperText = useMemo(() => {
@@ -54,6 +69,53 @@ export default function AiChatbot() {
         }
         return status;
     }, [isConnecting, isSending, status]);
+
+    useEffect(() => {
+        if (typeof window === "undefined") {
+            return;
+        }
+
+        const SpeechRecognition =
+            window.SpeechRecognition || window.webkitSpeechRecognition || null;
+
+        if (!SpeechRecognition) {
+            setIsSpeechAvailable(false);
+            return;
+        }
+
+        const recognition = new SpeechRecognition();
+        recognition.lang = "es-VE";
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+
+        recognition.onstart = () => {
+            setIsListening(true);
+            setSpeechError("");
+            setStatus("Escuchando… habla ahora.");
+        };
+        recognition.onresult = (event) => {
+            const transcript = event.results?.[0]?.[0]?.transcript || "";
+            if (transcript.trim()) {
+                setInput((current) => [current, transcript.trim()].filter(Boolean).join(" "));
+                setStatus("Texto dictado listo para enviar.");
+            }
+        };
+        recognition.onerror = (event) => {
+            setSpeechError(`No se pudo capturar voz (${event.error || "error desconocido"}).`);
+            setStatus("No se pudo usar dictado por voz.");
+        };
+        recognition.onend = () => {
+            setIsListening(false);
+        };
+
+        speechRef.current = recognition;
+        setIsSpeechAvailable(true);
+
+        return () => {
+            speechRef.current?.stop();
+            speechRef.current = null;
+        };
+    }, []);
 
     useEffect(() => {
         function handlePrefill(event) {
@@ -146,6 +208,65 @@ export default function AiChatbot() {
         void sendMessage(input);
     }
 
+    function toggleSpeechRecognition() {
+        if (!speechRef.current) {
+            setSpeechError("Tu navegador no soporta dictado por voz en este dispositivo.");
+            return;
+        }
+        if (isListening) {
+            speechRef.current.stop();
+            return;
+        }
+        speechRef.current.start();
+    }
+
+    async function handleAnalyzeMedia() {
+        if (!selectedMedia || isAnalyzingMedia) {
+            return;
+        }
+
+        setIsAnalyzingMedia(true);
+        setError("");
+        setMediaResult(null);
+        try {
+            const formData = new FormData();
+            formData.append("file", selectedMedia);
+            if (input.trim()) {
+                formData.append("question", input.trim());
+            }
+
+            const response = await fetch("/api/ai-chat/media", {
+                method: "POST",
+                body: formData,
+            });
+            const result = await response.json();
+            if (!response.ok) {
+                throw new Error(result.error || "No se pudo analizar el archivo.");
+            }
+
+            const payload = normalizeMediaPayload(result);
+            if (!payload) {
+                throw new Error("No se recibió un análisis válido del archivo.");
+            }
+
+            setMediaResult(payload);
+            if (payload.assisted_query) {
+                setInput(payload.assisted_query);
+            }
+            if (payload.assistant_hint) {
+                setStatus(payload.assistant_hint);
+            }
+        } catch (analyzeError) {
+            setError(
+                analyzeError instanceof Error
+                    ? analyzeError.message
+                    : "No se pudo analizar el archivo."
+            );
+        } finally {
+            setIsAnalyzingMedia(false);
+        }
+    }
+
     return (
         <section className="panel ai-chatbot-panel" id="ai-chatbot-section">
             <div className="section-heading ai-chatbot-heading">
@@ -219,6 +340,74 @@ export default function AiChatbot() {
                         value={input}
                     />
                 </label>
+                <div className="actions-row ai-chatbot-input-tools">
+                    <button
+                        className="button-secondary"
+                        onClick={toggleSpeechRecognition}
+                        type="button"
+                    >
+                        {isListening ? "Detener dictado" : "🎤 Dictar pregunta"}
+                    </button>
+                    {!isSpeechAvailable ? (
+                        <span className="pill">Dictado no disponible en este navegador.</span>
+                    ) : null}
+                </div>
+                {speechError ? <p className="ai-chatbot-error">{speechError}</p> : null}
+
+                <div className="field-group">
+                    <span>Imagen o video (OCR / soporte visual)</span>
+                    <input
+                        accept="image/*,video/*"
+                        onChange={(event) => {
+                            const file = event.target.files?.[0] || null;
+                            setSelectedMedia(file);
+                            setMediaResult(null);
+                        }}
+                        type="file"
+                    />
+                    <div className="actions-row ai-chatbot-input-tools">
+                        <button
+                            className="button-secondary"
+                            disabled={!selectedMedia || isAnalyzingMedia}
+                            onClick={() => void handleAnalyzeMedia()}
+                            type="button"
+                        >
+                            {isAnalyzingMedia ? "Analizando archivo…" : "Analizar archivo"}
+                        </button>
+                        {selectedMedia ? (
+                            <span className="pill">
+                                {selectedMedia.name} ({Math.ceil(selectedMedia.size / 1024)} KB)
+                            </span>
+                        ) : null}
+                    </div>
+                </div>
+
+                {mediaResult ? (
+                    <div className="support-card ai-chatbot-card">
+                        <strong>Resultado visual</strong>
+                        <p>{mediaResult.assistant_hint || "Análisis completado."}</p>
+                        {mediaResult.extracted_fields ? (
+                            <div className="ai-chatbot-sources">
+                                {Object.entries(mediaResult.extracted_fields).map(([key, values]) =>
+                                    Array.isArray(values) && values.length ? (
+                                        <span className="pill" key={key}>
+                                            {key.toUpperCase()}: {values.join(", ")}
+                                        </span>
+                                    ) : null
+                                )}
+                            </div>
+                        ) : null}
+                        {Array.isArray(mediaResult.matches) && mediaResult.matches.length ? (
+                            <p>
+                                Coincidencias:{" "}
+                                {mediaResult.matches
+                                    .map((item) => item.sku)
+                                    .filter(Boolean)
+                                    .join(", ")}
+                            </p>
+                        ) : null}
+                    </div>
+                ) : null}
                 <div className="actions-row">
                     <button className="button-primary" disabled={!canSend} type="submit">
                         {isSending ? "Consultando…" : "Enviar mensaje"}

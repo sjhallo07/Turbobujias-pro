@@ -22,7 +22,7 @@ import gradio as gr
 import requests
 import whisper
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import FastAPI, File, Form, UploadFile
 from huggingface_hub import InferenceClient
 from langchain_core.documents import Document
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -147,9 +147,13 @@ GITHUB_MAX_TOKENS = env_int("GITHUB_MAX_TOKENS", 600)
 HF_MAX_NEW_TOKENS = env_int("HF_MAX_NEW_TOKENS", 384)
 HF_TIMEOUT_SECONDS = env_float("HF_TIMEOUT_SECONDS", 20.0)
 GEMINI_TIMEOUT_SECONDS = env_float("GEMINI_TIMEOUT_SECONDS", 12.0)
-GEMINI_TEMPERATURE = env_float("GEMINI_TEMPERATURE", 0.2)
-GEMINI_TOP_P = env_float("GEMINI_TOP_P", 0.9)
+GEMINI_TEMPERATURE = env_float("GEMINI_TEMPERATURE", 0.0)
+GEMINI_TOP_P = env_float("GEMINI_TOP_P", 0.1)
 GEMINI_MAX_OUTPUT_TOKENS = env_int("GEMINI_MAX_OUTPUT_TOKENS", 384)
+MEDIA_OCR_MODEL_ID = os.environ.get("MEDIA_OCR_MODEL_ID", "microsoft/trocr-base-printed").strip()
+MAX_MEDIA_UPLOAD_BYTES = env_int("MAX_MEDIA_UPLOAD_BYTES", 8 * 1024 * 1024)
+WEB_SEARCH_HOOK_ENABLED = env_bool("WEB_SEARCH_HOOK_ENABLED", False)
+WEB_SEARCH_PROVIDER_LABEL = os.environ.get("WEB_SEARCH_PROVIDER_LABEL", "future_autoparts_web_lookup").strip()
 
 configured_providers = {
     "github": bool(GITHUB_TOKEN),
@@ -216,13 +220,15 @@ if LLM_PROVIDER == "github" and not GITHUB_TOKEN and GEMINI_FALLBACK_ENABLED and
 # 1. Load inventory data
 # ─────────────────────────────────────────────
 SYSTEM_PROMPT = (
-    "You are Turbobujias AI Assistant, a specialist in spark plugs, glow plugs, diesel parts, "
-    "SKU/UPC matching, and vehicle compatibility for the Venezuelan market. "
-    "Use the catalog context as the primary source of truth. "
-    "Before answering, silently self-check for contradictions, missing fitment details, and invented part numbers. "
-    "If the catalog is insufficient or the application is ambiguous, say so clearly and ask for the minimum follow-up details needed, "
-    "such as brand, model, engine, fuel type, or year. "
-    "Prefer concise, practical answers with exact SKU references when available, short comparisons when useful, and a brief note about uncertainty when needed."
+    "Eres el asistente e-commerce de Turbobujias Pro, especializado en autopartes, bujías, calentadores, partes diésel, "
+    "validación de fitment, referencias cruzadas y coincidencias exactas por SKU/UPC/OEM/modelo/aplicación. "
+    "Regla crítica: usa SOLO evidencia recuperada del catálogo/base de datos local como fuente de verdad. "
+    "Nunca inventes SKU, UPC, compatibilidad vehicular, dimensiones, voltajes, roscas, disponibilidad ni stock. "
+    "Cuando no haya evidencia suficiente, dilo explícitamente y haz una pregunta corta pidiendo solo el mínimo faltante: marca, modelo, motor, año o combustible. "
+    "Marca siempre el nivel de evidencia como una de estas opciones: Coincidencia exacta, Coincidencia probable, o Evidencia insuficiente. "
+    "Prioriza coincidencias exactas por SKU/modelo/aplicación antes de recomendaciones similares. "
+    "Si el usuario escribe en español, responde en español (español de Venezuela preferido). "
+    "Mantén respuestas concisas, prácticas y orientadas a compra."
 )
 
 INVENTORY_PATH = APP_DIR / "inventory.json"
@@ -428,6 +434,7 @@ def build_exact_lookup_answer(item: dict[str, Any]) -> str:
     answer_lines = [
         f"El producto que corresponde a **{sku}** es:",
         "",
+        "- **Nivel de evidencia:** Coincidencia exacta",
         f"- **Marca:** {brand}",
         f"- **Modelo:** {model}",
         f"- **UPC:** {upc or 'N/A'}",
@@ -464,6 +471,129 @@ def try_exact_lookup_answer(query: str, docs: list[Document]) -> tuple[str, list
     answer = build_exact_lookup_answer(exact_item)
     sources = [sku]
     return answer, sources
+
+
+def classify_evidence_level(query: str, sources: list[str]) -> str:
+    if find_exact_inventory_item(query) is not None:
+        return "Coincidencia exacta"
+    if sources:
+        return "Coincidencia probable"
+    return "Evidencia insuficiente"
+
+
+def apply_evidence_header(query: str, answer: str, sources: list[str]) -> str:
+    if "Nivel de evidencia" in answer:
+        return answer
+
+    evidence_level = classify_evidence_level(query, sources)
+    if evidence_level == "Evidencia insuficiente":
+        follow_up = "Comparte marca, modelo, motor, año y combustible para validar fitment exacto."
+        return f"- **Nivel de evidencia:** {evidence_level}\n{answer}\n\n{follow_up}".strip()
+    return f"- **Nivel de evidencia:** {evidence_level}\n{answer}".strip()
+
+
+def extract_precision_fields(raw_text: str) -> dict[str, list[str]]:
+    text = raw_text.upper()
+    sku_candidates = sorted(set(re.findall(r"\b[A-Z0-9]{2,}(?:-[A-Z0-9]{2,})+\b", text)))
+    upc_candidates = sorted(set(re.findall(r"\b\d{8,14}\b", raw_text)))
+    thread_candidates = sorted(set(re.findall(r"\bM?\d{1,2}(?:\.\d)?X\d{1,2}(?:\.\d)?\b", text)))
+    voltage_candidates = sorted(set(re.findall(r"\b\d{1,2}(?:\.\d)?\s?V\b", text)))
+    brand_candidates = sorted(
+        {
+            brand
+            for brand in ("NGK", "BOSCH", "DENSO", "CHAMPION", "BERU", "MOTORCRAFT", "ACDELCO", "AUTOLITE")
+            if brand in text
+        }
+    )
+
+    return {
+        "sku": sku_candidates[:5],
+        "upc": upc_candidates[:5],
+        "thread": thread_candidates[:5],
+        "voltage": voltage_candidates[:5],
+        "brand": brand_candidates[:5],
+    }
+
+
+def find_catalog_matches_from_fields(fields: dict[str, list[str]]) -> list[dict[str, Any]]:
+    sku_values = {value.upper() for value in fields.get("sku", [])}
+    upc_values = set(fields.get("upc", []))
+    brand_values = {value.upper() for value in fields.get("brand", [])}
+
+    ranked: list[tuple[int, dict[str, Any]]] = []
+    for item in inventory_items:
+        score = 0
+        item_sku = str(item.get("sku", "")).strip().upper()
+        item_upc = str(item.get("upc", "")).strip()
+        item_brand = str(item.get("brand", "")).strip().upper()
+
+        if item_sku and item_sku in sku_values:
+            score += 100
+        if item_upc and item_upc in upc_values:
+            score += 90
+        if item_brand and item_brand in brand_values:
+            score += 15
+        if score:
+            ranked.append((score, item))
+
+    ranked.sort(key=lambda entry: entry[0], reverse=True)
+    return [item for _score, item in ranked[:3]]
+
+
+def build_media_assisted_query(fields: dict[str, list[str]], user_question: str = "") -> str:
+    ordered_parts: list[str] = []
+    if fields.get("sku"):
+        ordered_parts.append(f"SKU {fields['sku'][0]}")
+    if fields.get("upc"):
+        ordered_parts.append(f"UPC {fields['upc'][0]}")
+    if fields.get("brand"):
+        ordered_parts.append(f"marca {fields['brand'][0]}")
+    if fields.get("thread"):
+        ordered_parts.append(f"rosca {fields['thread'][0]}")
+    if fields.get("voltage"):
+        ordered_parts.append(f"voltaje {fields['voltage'][0]}")
+
+    if not ordered_parts:
+        return user_question.strip()
+
+    prefix = " ".join(ordered_parts)
+    if user_question.strip():
+        return f"{prefix}. {user_question.strip()}"
+    return f"Validar compatibilidad y equivalencias para {prefix}."
+
+
+def extract_text_from_image_bytes(image_bytes: bytes) -> str:
+    if huggingface_client is None:
+        return ""
+
+    try:
+        response = huggingface_client.image_to_text(image_bytes, model=MEDIA_OCR_MODEL_ID)
+    except Exception as exc:
+        _log.warning("OCR extraction failed: %s", exc)
+        return ""
+
+    if isinstance(response, list):
+        parts = []
+        for item in response:
+            if isinstance(item, dict):
+                parts.append(str(item.get("generated_text", "")).strip())
+            else:
+                parts.append(str(item).strip())
+        return " ".join(part for part in parts if part).strip()
+
+    if isinstance(response, dict):
+        return str(response.get("generated_text", "")).strip()
+
+    return str(response).strip()
+
+
+def get_web_search_hook_status(query: str) -> dict[str, str | bool]:
+    return {
+        "enabled": WEB_SEARCH_HOOK_ENABLED,
+        "provider": WEB_SEARCH_PROVIDER_LABEL,
+        "policy": "web_hint_never_overrides_catalog",
+        "query_preview": query[:120],
+    }
 
 
 # ─────────────────────────────────────────────
@@ -532,8 +662,8 @@ def _call_github_models(messages: list[dict]) -> str:
         try:
             response = github_client.chat.completions.create(  # type: ignore[union-attr]
                 messages=messages,
-                temperature=0.3,
-                top_p=1.0,
+                temperature=0,
+                top_p=0.1,
                 max_tokens=800,
                 model=GITHUB_MODELS_MODEL,
             )
@@ -566,7 +696,8 @@ def answer_with_github_models(
             "content": (
                 f"Catalog context:\n{context}\n\n"
                 f"Customer question: {query}\n\n"
-                "Respond in the same language as the customer when possible."
+                "Responde en el idioma del cliente (español por defecto). "
+                "Muestra el nivel de evidencia (exacta/probable/insuficiente) y pide solo los datos faltantes mínimos cuando aplique."
             ),
         }
     )
@@ -594,8 +725,8 @@ def answer_with_huggingface(
         messages=messages,
         model=HF_MODEL_REPO_ID,
         max_tokens=HF_MAX_NEW_TOKENS,
-        temperature=0.2,
-        top_p=0.9,
+        temperature=0,
+        top_p=0.1,
     )
 
     answer = str(
@@ -634,7 +765,8 @@ def answer_with_gemini(
                     "text": (
                         f"Catalog context:\n{context}\n\n"
                         f"Customer question: {query}\n\n"
-                        "Respond in the same language as the customer when possible."
+                        "Responde en el idioma del cliente (español por defecto). "
+                        "Muestra el nivel de evidencia (exacta/probable/insuficiente) y pide solo los datos faltantes mínimos cuando aplique."
                     )
                 }
             ],
@@ -759,6 +891,7 @@ def chat_api(message: str, history: list[dict[str, str]] | None = None) -> dict[
 
     try:
         answer, sources = answer_query(message, current_history)
+        answer = apply_evidence_header(message, answer, sources)
     except Exception as exc:
         answer = _safe_llm_error_message(exc)
         sources = []
@@ -787,6 +920,26 @@ class ChatResponse(BaseModel):
     history: list[ChatTurn] = Field(default_factory=list)
 
 
+class MediaCatalogMatch(BaseModel):
+    sku: str = ""
+    brand: str = ""
+    model: str = ""
+    upc: str = ""
+    type: str = ""
+
+
+class MediaAnalysisResponse(BaseModel):
+    media_type: str
+    filename: str
+    status: str
+    extracted_text: str = ""
+    extracted_fields: dict[str, list[str]] = Field(default_factory=dict)
+    matches: list[MediaCatalogMatch] = Field(default_factory=list)
+    assisted_query: str = ""
+    assistant_hint: str = ""
+    web_search_hook: dict[str, str | bool] = Field(default_factory=dict)
+
+
 api_app = FastAPI(
     title="Turbobujias AI Assistant API",
     description="Local REST API for the Turbobujias AI chatbot.",
@@ -812,12 +965,111 @@ def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     )
 
 
+@api_app.post("/analyze-media", response_model=MediaAnalysisResponse)
+async def analyze_media_endpoint(
+    file: UploadFile = File(...),
+    question: str = Form(""),
+) -> MediaAnalysisResponse:
+    media_type = (file.content_type or "").lower()
+    filename = file.filename or "upload"
+    payload = await file.read()
+
+    if not payload:
+        return MediaAnalysisResponse(
+            media_type=media_type or "unknown",
+            filename=filename,
+            status="empty_upload",
+            assistant_hint="No recibí contenido en el archivo. Intenta de nuevo.",
+            web_search_hook=get_web_search_hook_status(question),
+        )
+
+    if len(payload) > MAX_MEDIA_UPLOAD_BYTES:
+        return MediaAnalysisResponse(
+            media_type=media_type or "unknown",
+            filename=filename,
+            status="file_too_large",
+            assistant_hint="El archivo es muy grande. Sube una imagen o video corto de hasta 8 MB.",
+            web_search_hook=get_web_search_hook_status(question),
+        )
+
+    if media_type.startswith("video/"):
+        return MediaAnalysisResponse(
+            media_type=media_type,
+            filename=filename,
+            status="video_not_supported_yet",
+            assistant_hint=(
+                "Recibí tu video y guardé metadatos básicos para una futura etapa de reconocimiento. "
+                "Por ahora, sube una foto nítida de etiqueta/SKU/UPC para búsqueda precisa."
+            ),
+            assisted_query=question.strip(),
+            web_search_hook=get_web_search_hook_status(question),
+        )
+
+    if not media_type.startswith("image/"):
+        return MediaAnalysisResponse(
+            media_type=media_type or "unknown",
+            filename=filename,
+            status="unsupported_media_type",
+            assistant_hint="Formato no compatible. Usa imagen (JPG/PNG/WebP) o video corto.",
+            web_search_hook=get_web_search_hook_status(question),
+        )
+
+    ocr_text = extract_text_from_image_bytes(payload)
+    searchable_text = f"{filename}\n{ocr_text}".strip()
+    extracted_fields = extract_precision_fields(searchable_text)
+    matches = find_catalog_matches_from_fields(extracted_fields)
+    assisted_query = build_media_assisted_query(extracted_fields, question)
+
+    if matches:
+        hint = (
+            "Encontré coincidencias de catálogo basadas en la imagen. "
+            "Confirma marca/modelo/motor/año/combustible para validar fitment exacto."
+        )
+        status = "matched_catalog_candidates"
+    elif any(extracted_fields.values()):
+        hint = (
+            "Extraje datos de la imagen, pero sin coincidencia exacta en catálogo. "
+            "Puedo intentar equivalencias si me confirmas marca, modelo, motor, año y combustible."
+        )
+        status = "extracted_without_exact_match"
+    else:
+        hint = (
+            "No pude extraer texto suficiente de la imagen. "
+            "Intenta otra foto más nítida y cercana a la etiqueta/SKU/UPC."
+        )
+        status = "insufficient_visual_evidence"
+
+    response_matches = [
+        MediaCatalogMatch(
+            sku=str(item.get("sku", "")),
+            brand=str(item.get("brand", "")),
+            model=str(item.get("model", "")),
+            upc=str(item.get("upc", "")),
+            type=str(item.get("type", "")),
+        )
+        for item in matches
+    ]
+
+    return MediaAnalysisResponse(
+        media_type=media_type,
+        filename=filename,
+        status=status,
+        extracted_text=ocr_text[:1800],
+        extracted_fields=extracted_fields,
+        matches=response_matches,
+        assisted_query=assisted_query,
+        assistant_hint=hint,
+        web_search_hook=get_web_search_hook_status(assisted_query or question),
+    )
+
+
 def answer_text(query: str, history: list) -> tuple[str, list, list]:
     """Process a text query and return (cleared_input, updated_chatbot, updated_state)."""
     if not query.strip():
         return "", history, history
     try:
         answer, sources = answer_query(query, history)
+        answer = apply_evidence_header(query, answer, sources)
     except Exception as exc:
         answer = _safe_llm_error_message(exc)
         sources = []
@@ -918,4 +1170,3 @@ if __name__ == "__main__":
         host=os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1"),
         port=int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", "7860"))),
     )
-
