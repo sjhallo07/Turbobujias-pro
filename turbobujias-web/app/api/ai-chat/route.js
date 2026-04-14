@@ -135,7 +135,7 @@ export async function POST(request) {
                 : {
                       reply: String(result || ""),
                       sources: [],
-                      history,
+                      history: Array.isArray(history) ? history : [],
                   };
 
         return NextResponse.json({
