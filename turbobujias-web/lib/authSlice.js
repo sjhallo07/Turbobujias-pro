@@ -31,7 +31,7 @@ export function detectAdminFromEmail(email) {
   const [localPart = "", domain = ""] = normalizedEmail.split("@");
   return Boolean(
     ADMIN_LOCAL_PART_PATTERN.test(localPart) ||
-      (ADMIN_DOMAINS.has(domain) && ADMIN_LOCAL_PART_PATTERN.test(localPart || domain))
+      (ADMIN_DOMAINS.has(domain) && ADMIN_LOCAL_PART_PATTERN.test(localPart))
   );
 }
 
@@ -52,6 +52,7 @@ function sanitizeStoredUser(user) {
     phone: String(user.phone || "").trim(),
     business: String(user.business || "").trim(),
     passwordHash: String(user.passwordHash || "").trim(),
+    passwordSalt: String(user.passwordSalt || "").trim(),
     isAdmin: Boolean(user.isAdmin ?? detectAdminFromEmail(email)),
     createdAt: String(user.createdAt || new Date(0).toISOString()),
   };

@@ -25,16 +25,62 @@ function sanitizePersistedPayload(payload) {
 }
 
 async function hashPassword(password) {
+  const saltBuffer = window.crypto.getRandomValues(new Uint8Array(16));
   const normalizedPassword = String(password || "");
-  const buffer = await window.crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(normalizedPassword)
+  const keyMaterial = await window.crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(normalizedPassword),
+    "PBKDF2",
+    false,
+    ["deriveBits"]
+  );
+  const buffer = await window.crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: saltBuffer,
+      iterations: 120000,
+    },
+    keyMaterial,
+    256
+  );
+
+  return {
+    passwordHash: Array.from(new Uint8Array(buffer), (value) =>
+      value.toString(16).padStart(2, "0")
+    ).join(""),
+    passwordSalt: Array.from(saltBuffer, (value) => value.toString(16).padStart(2, "0")).join(""),
+  };
+}
+
+async function hashPasswordWithSalt(password, passwordSalt) {
+  const normalizedPassword = String(password || "");
+  const saltHex = String(passwordSalt || "");
+  const saltBuffer = Uint8Array.from(
+    saltHex.match(/.{1,2}/g)?.map((chunk) => parseInt(chunk, 16)) || []
+  );
+  const keyMaterial = await window.crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(normalizedPassword),
+    "PBKDF2",
+      false,
+      ["deriveBits"]
+  );
+  const buffer = await window.crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: saltBuffer,
+      iterations: 120000,
+    },
+    keyMaterial,
+    256
   );
 
   return Array.from(new Uint8Array(buffer), (value) => value.toString(16).padStart(2, "0")).join("");
 }
 
-function createStoredUser(values, passwordHash) {
+function createStoredUser(values, passwordHash, passwordSalt) {
   const email = String(values.email || "").trim().toLowerCase();
 
   return {
@@ -44,6 +90,7 @@ function createStoredUser(values, passwordHash) {
     phone: String(values.phone || "").trim(),
     business: String(values.business || "").trim(),
     passwordHash,
+    passwordSalt,
     isAdmin: detectAdminFromEmail(email),
     createdAt: new Date().toISOString(),
   };
@@ -142,8 +189,12 @@ export default function AuthModal({ isOpen, mode, onClose, onModeChange }) {
         throw new Error("Ya existe una cuenta registrada con ese correo.");
       }
 
-      const passwordHash = await hashPassword(registerForm.password);
-      const storedUser = createStoredUser({ ...registerForm, email: trimmedEmail }, passwordHash);
+      const { passwordHash, passwordSalt } = await hashPassword(registerForm.password);
+      const storedUser = createStoredUser(
+        { ...registerForm, email: trimmedEmail },
+        passwordHash,
+        passwordSalt
+      );
       dispatch(registerSuccess(storedUser));
       setStatus(
         storedUser.isAdmin
@@ -178,12 +229,14 @@ export default function AuthModal({ isOpen, mode, onClose, onModeChange }) {
         throw new Error("Ingresa correo y contraseña.");
       }
 
-      const passwordHash = await hashPassword(loginForm.password);
-      const matchedUser = users.find(
-        (user) => user.email === trimmedEmail && user.passwordHash === passwordHash
-      );
+      const matchedUser = users.find((user) => user.email === trimmedEmail);
 
       if (!matchedUser) {
+        throw new Error("No encontramos una cuenta con esas credenciales.");
+      }
+
+      const passwordHash = await hashPasswordWithSalt(loginForm.password, matchedUser.passwordSalt);
+      if (matchedUser.passwordHash !== passwordHash) {
         throw new Error("No encontramos una cuenta con esas credenciales.");
       }
 
