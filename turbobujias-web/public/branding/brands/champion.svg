@@ -1,0 +1,7 @@
+<svg width="180" height="72" viewBox="0 0 180 72" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="180" height="72" rx="18" fill="#ffffff"/>
+  <rect x="22" y="16" width="136" height="40" rx="12" fill="#111827"/>
+  <path d="M43 56L83 16H95L55 56H43Z" fill="#F2C94C" fill-opacity="0.95"/>
+  <path d="M58 56L98 16H110L70 56H58Z" fill="#E63946" fill-opacity="0.92"/>
+  <text x="108" y="42" fill="#ffffff" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="700" letter-spacing="1">CHAMPION</text>
+</svg>

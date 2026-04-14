@@ -4,7 +4,10 @@ import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import AiChatbot from "./ai-chatbot";
+import AuthModal from "./auth-modal";
+import ContactForms from "./contact-forms";
 import QrScanner from "./qr-scanner";
+import { logout, selectCurrentUser, selectIsAdmin } from "../lib/authSlice";
 import {
   addToCart,
   clearCart,
@@ -22,7 +25,7 @@ const DEFAULT_HF_SPACE_URL =
 const DEFAULT_WHATSAPP_URL =
   process.env.NEXT_PUBLIC_WHATSAPP_URL || "https://api.whatsapp.com/send";
 const DEFAULT_INSTAGRAM_URL =
-  process.env.NEXT_PUBLIC_INSTAGRAM_URL || "https://www.instagram.com/";
+  process.env.NEXT_PUBLIC_INSTAGRAM_URL || "https://www.instagram.com/turbobujiaspro/";
 const DEFAULT_MERCADOLIBRE_URL =
   process.env.NEXT_PUBLIC_MERCADOLIBRE_URL || "https://www.mercadolibre.com.ve/";
 const DEFAULT_PAYPAL_URL = process.env.NEXT_PUBLIC_PAYPAL_URL || "https://www.paypal.com/";
@@ -42,13 +45,58 @@ const THEME_OPTIONS = [
   { value: "light", label: "Claro" },
   { value: "dark", label: "Oscuro" },
 ];
-const PARTNER_BRAND_COPY = {
-  NGK: "Encendido confiable para alta rotación y taller.",
-  Bosch: "Cobertura europea y desempeño estable en calle.",
-  Champion: "Opciones de trabajo pesado para flotas y pick-ups.",
-  Denso: "Tecnología OEM ideal para vehículos asiáticos.",
-};
-const DEFAULT_PARTNER_BRANDS = ["NGK", "Bosch", "Champion", "Denso"];
+const BRAND_SHOWCASE = [
+  {
+    name: "NGK",
+    icon: "/branding/brands/ngk.svg",
+    accent: "#d61f26",
+    description: "Encendido confiable y rotación alta para taller, mostrador y mantenimiento preventivo.",
+  },
+  {
+    name: "Champion",
+    icon: "/branding/brands/champion.svg",
+    accent: "#f2c94c",
+    description: "Cobertura para trabajo pesado, pickups y flotas que exigen respuesta rápida.",
+  },
+  {
+    name: "Denso",
+    icon: "/branding/brands/denso.svg",
+    accent: "#d62828",
+    description: "Catálogo OEM para vehículos asiáticos con foco en rendimiento y consumo estable.",
+  },
+  {
+    name: "Bosch",
+    icon: "/branding/brands/bosch.svg",
+    accent: "#ea0016",
+    description: "Línea europea y diésel con excelente cobertura para sensores, encendido y servicio rápido.",
+  },
+];
+const DIESEL_PART_CATEGORIES = [
+  {
+    slug: "calentadores",
+    title: "Calentadores",
+    detail: "Stock inmediato para arranque en frío, pickups y utilitarios diésel.",
+    ctaMessage: "Hola, necesito cotizar calentadores diésel para mi vehículo.",
+  },
+  {
+    slug: "inyectores",
+    title: "Inyectores",
+    detail: "Gestión por código Bosch/Denso, revisión de compatibilidad y cotización por pedido.",
+    ctaMessage: "Hola, necesito cotizar inyectores diésel y validar compatibilidad.",
+  },
+  {
+    slug: "bombas",
+    title: "Bombas",
+    detail: "Bombas de alimentación e inyección con atención comercial para importación y reposición.",
+    ctaMessage: "Hola, necesito cotizar bombas diésel para un cliente.",
+  },
+  {
+    slug: "filtros",
+    title: "Filtros",
+    detail: "Filtros de combustible y aire con combos para mantenimiento preventivo.",
+    ctaMessage: "Hola, necesito cotizar filtros diésel para mantenimiento.",
+  },
+];
 const CUSTOMER_REVIEWS = [
   {
     name: "Luis R.",
@@ -309,6 +357,7 @@ function InventoryCard({ item, currencyMode, onAdd, onConsult }) {
       : currencyMode === "EUR"
         ? "Precio convertido EUR"
         : "Precio base USD";
+  const typeLabel = item.type === "diesel_glow_plug" ? "Calentador" : "Bujía";
 
   return (
     <article className="product-card">
@@ -319,9 +368,7 @@ function InventoryCard({ item, currencyMode, onAdd, onConsult }) {
             {item.model} · {item.sku}
           </h3>
         </div>
-        <div className={`pill ${item.stock > 40 ? "success" : "warning"}`}>
-          Stock: {item.stock}
-        </div>
+        <div className={`pill ${item.stock > 40 ? "success" : "warning"}`}>Stock: {item.stock}</div>
       </div>
 
       <div className="product-card-body">
@@ -334,11 +381,11 @@ function InventoryCard({ item, currencyMode, onAdd, onConsult }) {
           <dl>
             <div>
               <dt>UPC</dt>
-              <dd>{item.upc}</dd>
+              <dd>{item.upc || "—"}</dd>
             </div>
             <div>
               <dt>Tipo</dt>
-              <dd>{item.type === "diesel_glow_plug" ? "Calentador" : "Bujía"}</dd>
+              <dd>{typeLabel}</dd>
             </div>
             <div>
               <dt>Rosca</dt>
@@ -374,11 +421,7 @@ function InventoryCard({ item, currencyMode, onAdd, onConsult }) {
           <button className="button-primary" onClick={() => onAdd(item)} type="button">
             Agregar al carrito
           </button>
-          <button
-            className="button-secondary"
-            onClick={() => onConsult(item)}
-            type="button"
-          >
+          <button className="button-secondary" onClick={() => onConsult(item)} type="button">
             Consultar con IA
           </button>
         </div>
@@ -401,10 +444,9 @@ function CartPanel({ currencyMode, exchangeRates, paymentLinks, whatsappUrl }) {
   const taxDisplay = convertLineTotal(taxUsd, currencyMode, exchangeRates);
   const shippingDisplay = convertLineTotal(shippingUsd, currencyMode, exchangeRates);
   const totalDisplay = convertLineTotal(totalUsd, currencyMode, exchangeRates);
-  const currencyCode = currencyMode;
   const checkoutMessage = buildCheckoutMessage({
     items,
-    currencyCode,
+    currencyCode: currencyMode,
     exchangeRate: exchangeRates,
     subtotalDisplay,
     totalDisplay,
@@ -420,14 +462,14 @@ function CartPanel({ currencyMode, exchangeRates, paymentLinks, whatsappUrl }) {
       </p>
 
       {items.length === 0 ? (
-        <div className="empty-state">
+        <div className="empty-state compact-empty-state">
           <p>Agrega repuestos para iniciar la cotización o preparar una orden.</p>
         </div>
       ) : (
         <>
           <div className="cart-list">
             {items.map((item) => {
-              const lineTotal = convertLineTotal(item.lineTotal, currencyCode, exchangeRates);
+              const lineTotal = convertLineTotal(item.lineTotal, currencyMode, exchangeRates);
 
               return (
                 <div className="cart-item" key={item.sku}>
@@ -436,33 +478,21 @@ function CartPanel({ currencyMode, exchangeRates, paymentLinks, whatsappUrl }) {
                       <h4>{item.brand + " " + item.model}</h4>
                       <div className="muted">{item.sku}</div>
                     </div>
-                    <strong>{formatCurrency(lineTotal, currencyCode)}</strong>
+                    <strong>{formatCurrency(lineTotal, currencyMode)}</strong>
                   </div>
 
                   <div className="cart-actions">
                     <div className="qty-controls">
-                      <button
-                        className="qty-button"
-                        onClick={() => dispatch(decrementQuantity(item.sku))}
-                        type="button"
-                      >
+                      <button className="qty-button" onClick={() => dispatch(decrementQuantity(item.sku))} type="button">
                         −
                       </button>
                       <span>{item.quantity}</span>
-                      <button
-                        className="qty-button"
-                        onClick={() => dispatch(incrementQuantity(item.sku))}
-                        type="button"
-                      >
+                      <button className="qty-button" onClick={() => dispatch(incrementQuantity(item.sku))} type="button">
                         +
                       </button>
                     </div>
 
-                    <button
-                      className="button-secondary"
-                      onClick={() => dispatch(removeFromCart(item.sku))}
-                      type="button"
-                    >
+                    <button className="button-secondary" onClick={() => dispatch(removeFromCart(item.sku))} type="button">
                       Eliminar
                     </button>
                   </div>
@@ -474,36 +504,27 @@ function CartPanel({ currencyMode, exchangeRates, paymentLinks, whatsappUrl }) {
           <div className="summary-lines">
             <div className="summary-line">
               <span>Subtotal</span>
-              <strong>{formatCurrency(subtotalDisplay, currencyCode)}</strong>
+              <strong>{formatCurrency(subtotalDisplay, currencyMode)}</strong>
             </div>
             <div className="summary-line">
               <span>IVA estimado (16%)</span>
-              <strong>{formatCurrency(taxDisplay, currencyCode)}</strong>
+              <strong>{formatCurrency(taxDisplay, currencyMode)}</strong>
             </div>
             <div className="summary-line">
               <span>Envío estimado</span>
-              <strong>{formatCurrency(shippingDisplay, currencyCode)}</strong>
+              <strong>{formatCurrency(shippingDisplay, currencyMode)}</strong>
             </div>
             <div className="summary-line total">
               <span>Total</span>
-              <strong>{formatCurrency(totalDisplay, currencyCode)}</strong>
+              <strong>{formatCurrency(totalDisplay, currencyMode)}</strong>
             </div>
           </div>
 
           <div className="actions-row">
-            <a
-              className="button-primary"
-              href={whatsappCheckoutUrl}
-              rel="noreferrer"
-              target="_blank"
-            >
+            <a className="button-primary" href={whatsappCheckoutUrl} rel="noreferrer" target="_blank">
               Checkout por WhatsApp
             </a>
-            <button
-              className="button-secondary"
-              onClick={() => dispatch(clearCart())}
-              type="button"
-            >
+            <button className="button-secondary" onClick={() => dispatch(clearCart())} type="button">
               Vaciar carrito
             </button>
           </div>
@@ -511,10 +532,7 @@ function CartPanel({ currencyMode, exchangeRates, paymentLinks, whatsappUrl }) {
           <div className="checkout-grid">
             <article className="checkout-card checkout-card-primary">
               <strong>Checkout web asistido</strong>
-              <p>
-                Envía el resumen del carrito en una ventana secundaria y confirma entrega, pago y
-                datos del cliente por WhatsApp.
-              </p>
+              <p>Envía el resumen del carrito y confirma entrega, pago y datos del cliente por WhatsApp.</p>
               <a href={whatsappCheckoutUrl} rel="noreferrer" target="_blank">
                 Abrir checkout asistido
               </a>
@@ -522,28 +540,25 @@ function CartPanel({ currencyMode, exchangeRates, paymentLinks, whatsappUrl }) {
             <article className="checkout-card">
               <strong>Mercado Libre</strong>
               <p>Completa la compra desde la vitrina pública cuando el cliente prefiera marketplace.</p>
-                <a href={paymentLinks.mercadoLibreUrl} rel="noreferrer" target="_blank">
+              <a href={paymentLinks.mercadoLibreUrl} rel="noreferrer" target="_blank">
                 Ir a Mercado Libre
               </a>
             </article>
             <article className="checkout-card">
               <strong>PayPal</strong>
               <p>Alternativa rápida para ventas internacionales o clientes que pagan en USD.</p>
-                <a href={paymentLinks.paypalUrl} rel="noreferrer" target="_blank">
+              <a href={paymentLinks.paypalUrl} rel="noreferrer" target="_blank">
                 Ir a PayPal
               </a>
             </article>
             <article className="checkout-card">
               <strong>Zelle / Binance Pay</strong>
-              <p>
-                Coordina Zelle por atención directa o abre Binance Pay en otra ventana para pagos
-                digitales.
-              </p>
+              <p>Coordina Zelle por atención directa o abre Binance Pay en otra ventana para pagos digitales.</p>
               <div className="actions-row">
                 <a href={whatsappCheckoutUrl} rel="noreferrer" target="_blank">
                   Coordinar Zelle
                 </a>
-                  <a href={paymentLinks.binancePayUrl} rel="noreferrer" target="_blank">
+                <a href={paymentLinks.binancePayUrl} rel="noreferrer" target="_blank">
                   Abrir Binance Pay
                 </a>
               </div>
@@ -557,6 +572,8 @@ function CartPanel({ currencyMode, exchangeRates, paymentLinks, whatsappUrl }) {
 
 export default function Storefront() {
   const dispatch = useDispatch();
+  const currentUser = useSelector(selectCurrentUser);
+  const isAdmin = useSelector(selectIsAdmin);
   const { items, exchangeRates, rateSource, ratesLastUpdated, isLoading, error } = useInventory();
   const runtimeConfig = usePublicRuntimeConfig();
   const { themeMode, setThemeMode } = useThemePreference();
@@ -565,11 +582,12 @@ export default function Storefront() {
   const [category, setCategory] = useState("all");
   const [vehicle, setVehicle] = useState("");
   const [currencyMode, setCurrencyMode] = useState("USD");
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [authMode, setAuthMode] = useState("login");
 
   const whatsappUrl = runtimeConfig?.links?.whatsappUrl || DEFAULT_WHATSAPP_URL;
   const instagramUrl = runtimeConfig?.links?.instagramUrl || DEFAULT_INSTAGRAM_URL;
-  const mercadoLibreUrl =
-    runtimeConfig?.links?.mercadoLibreUrl || DEFAULT_MERCADOLIBRE_URL;
+  const mercadoLibreUrl = runtimeConfig?.links?.mercadoLibreUrl || DEFAULT_MERCADOLIBRE_URL;
   const paypalUrl = runtimeConfig?.links?.paypalUrl || DEFAULT_PAYPAL_URL;
   const binancePayUrl = runtimeConfig?.links?.binancePayUrl || DEFAULT_BINANCE_PAY_URL;
   const chatbotPublicUrl = runtimeConfig?.chatbot?.publicUrl || DEFAULT_HF_SPACE_URL;
@@ -582,22 +600,17 @@ export default function Storefront() {
     [query, vehicle, brand !== "all" ? brand : ""].filter(Boolean).join(" ")
   );
 
-  function scrollToChatbot() {
-    document.getElementById("ai-chatbot-section")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+  function scrollToSection(sectionId) {
+    document.getElementById(sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
-  function scrollToCatalog() {
-    document.getElementById("catalog-section")?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+  function openAuthModal(nextMode) {
+    setAuthMode(nextMode);
+    setIsAuthModalOpen(true);
   }
 
   function handleConsultWithAI(selectedItem) {
-    scrollToChatbot();
+    scrollToSection("ai-chatbot-section");
     if (!selectedItem) {
       return;
     }
@@ -612,7 +625,7 @@ export default function Storefront() {
       .join(" ")
       .trim();
 
-    scrollToChatbot();
+    scrollToSection("ai-chatbot-section");
     if (!prompt) {
       return;
     }
@@ -626,14 +639,18 @@ export default function Storefront() {
     );
   }
 
+  function handleDieselCategory(categoryItem) {
+    setQuery(categoryItem.title);
+    setCategory(categoryItem.slug === "calentadores" ? "diesel_glow_plug" : "all");
+    scrollToSection("contact-section");
+  }
+
   const floatingWhatsAppUrl = buildWhatsAppUrl(
     whatsappUrl,
     "Hola, necesito ayuda con catálogo, pagos o disponibilidad en Turbobujias Pro."
   );
 
-  const brands = useMemo(() => {
-    return [...new Set(items.map((item) => item.brand))].sort();
-  }, [items]);
+  const brands = useMemo(() => [...new Set(items.map((item) => item.brand))].sort(), [items]);
 
   const suggestions = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -670,12 +687,10 @@ export default function Storefront() {
         item.model.toLowerCase().includes(normalizedQuery) ||
         title.includes(normalizedQuery) ||
         item.application.join(" ").toLowerCase().includes(normalizedQuery);
-
       const matchesBrand = brand === "all" || item.brand === brand;
       const matchesCategory = category === "all" || item.type === category;
       const matchesVehicle =
-        normalizedVehicle.length === 0 ||
-        item.application.join(" ").toLowerCase().includes(normalizedVehicle);
+        normalizedVehicle.length === 0 || item.application.join(" ").toLowerCase().includes(normalizedVehicle);
 
       return matchesQuery && matchesBrand && matchesCategory && matchesVehicle;
     });
@@ -693,54 +708,98 @@ export default function Storefront() {
   }, [items]);
 
   const featuredBrands = useMemo(() => {
-    const availableBrands = [...new Set(items.map((item) => item.brand))];
-    const source = (availableBrands.length ? availableBrands : DEFAULT_PARTNER_BRANDS).slice(0, 6);
+    const inventoryCounts = items.reduce((counts, item) => {
+      counts[item.brand] = (counts[item.brand] || 0) + 1;
+      return counts;
+    }, {});
 
-    return source.map((brandName) => ({
-      name: brandName,
-      description:
-        PARTNER_BRAND_COPY[brandName] ||
-        "Inventario activo para ventas rápidas, cotización y reposición inmediata.",
+    return BRAND_SHOWCASE.map((brandItem) => ({
+      ...brandItem,
+      inventoryCount: inventoryCounts[brandItem.name] || 0,
     }));
   }, [items]);
+
+  const quoteSeed = useMemo(
+    () => ({
+      query: [query, brand !== "all" ? brand : "", category !== "all" ? category : ""]
+        .filter(Boolean)
+        .join(" "),
+      vehicle,
+    }),
+    [brand, category, query, vehicle]
+  );
 
   return (
     <>
       <main className="page-shell">
         <section className="hero">
-        <div className="hero-badge">Valencia · Carabobo · Venezuela</div>
+          <div className="hero-badge">Valencia · Carabobo · Venezuela</div>
 
-        <div className="hero-grid">
-          <div>
-            <div className="brand-lockup">
-              <div className="brand-icon-shell">
-                <Image
-                  alt="Ícono Turbobujias"
-                  className="brand-icon"
-                  height={84}
-                  priority
-                    src="/branding/turbobujias-icon.jpg"
-                  width={84}
-                />
-              </div>
-                <div className="brand-logo-shell">
-                <Image
-                  alt="Logotipo de Turbobujias"
-                  className="brand-logo"
-                    height={120}
-                  priority
-                    src="/branding/turbobujias-logo.webp"
-                    width={320}
-                />
-              </div>
-            </div>
-            <h1>Turbobujias Pro</h1>
-            <p>
-              E-commerce automotriz con búsqueda por SKU/UPC, filtros por aplicación,
-                carrito Redux y precios en USD/EUR/VES para bujías, calentadores y repuestos diésel.
-            </p>
+          <div className="hero-grid">
+            <div>
+              <div className="hero-topbar">
+                <div className="brand-lockup">
+                  <div className="brand-icon-shell">
+                    <Image
+                      alt="Ícono Turbobujias"
+                      className="brand-icon"
+                      height={84}
+                      priority
+                      src="/branding/turbobujias-icon.jpg"
+                      width={84}
+                    />
+                  </div>
+                  <div className="brand-logo-shell">
+                    <Image
+                      alt="Logotipo de Turbobujias"
+                      className="brand-logo"
+                      height={120}
+                      priority
+                      src="/branding/turbobujias-logo.webp"
+                      width={320}
+                    />
+                  </div>
+                </div>
 
-            <div className="button-row">
+                <div className="auth-summary-card">
+                  <div>
+                    <span className="tag auth-tag">{currentUser ? "Sesión activa" : "Acceso rápido"}</span>
+                    <strong>{currentUser ? currentUser.name : "Login / registro"}</strong>
+                    <p>
+                      {currentUser
+                        ? `${currentUser.email}${isAdmin ? " · Perfil administrador" : " · Perfil cliente"}`
+                        : "Guarda datos, arma cotizaciones y detecta cuentas admin por correo."}
+                    </p>
+                  </div>
+                  <div className="actions-row">
+                    {currentUser ? (
+                      <>
+                        <span className={`pill ${isAdmin ? "success" : ""}`}>{isAdmin ? "Admin" : "Cliente"}</span>
+                        <button className="button-secondary" onClick={() => dispatch(logout())} type="button">
+                          Cerrar sesión
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button className="button-secondary" onClick={() => openAuthModal("login")} type="button">
+                          Login
+                        </button>
+                        <button className="button-primary" onClick={() => openAuthModal("register")} type="button">
+                          Registro
+                        </button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              <h1>Turbobujias Pro</h1>
+              <p>
+                E-commerce automotriz con búsqueda por SKU/UPC, login y registro modal, carrito Redux,
+                detección de administradores y precios en USD/EUR/VES para bujías, calentadores y repuestos diésel.
+              </p>
+
+              <div className="button-row">
                 {CURRENCY_OPTIONS.map((option) => (
                   <button
                     className={`button-chip ${currencyMode === option.value ? "active" : ""}`}
@@ -751,51 +810,57 @@ export default function Storefront() {
                     {option.label}
                   </button>
                 ))}
-                <button className="button-secondary" onClick={scrollToChatbot} type="button">
-                Abrir chatbot IA
+                <button className="button-secondary" onClick={() => scrollToSection("catalog-section")} type="button">
+                  Explorar catálogo
                 </button>
+                <button className="button-secondary" onClick={() => scrollToSection("contact-section")} type="button">
+                  Pedir cotización
+                </button>
+                <button className="button-secondary" onClick={() => scrollToSection("ai-chatbot-section")} type="button">
+                  Abrir chatbot IA
+                </button>
+              </div>
+
+              <div className="theme-toolbar">
+                <span className="muted">Tema</span>
+                {THEME_OPTIONS.map((option) => (
+                  <button
+                    className={`button-chip ${themeMode === option.value ? "active" : ""}`}
+                    key={option.value}
+                    onClick={() => setThemeMode(option.value)}
+                    type="button"
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
 
-            <div className="theme-toolbar">
-              <span className="muted">Tema</span>
-              {THEME_OPTIONS.map((option) => (
-                <button
-                  className={`button-chip ${themeMode === option.value ? "active" : ""}`}
-                  key={option.value}
-                  onClick={() => setThemeMode(option.value)}
-                  type="button"
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="stats-grid">
-            <div className="stat-card">
-              <strong>{stats.totalProducts}</strong>
-              <span>SKUs en catálogo</span>
-            </div>
-            <div className="stat-card">
-              <strong>{stats.glowPlugCount}</strong>
-              <span>Calentadores diésel</span>
-            </div>
-            <div className="stat-card">
+            <div className="stats-grid">
+              <div className="stat-card">
+                <strong>{stats.totalProducts}</strong>
+                <span>SKUs en catálogo</span>
+              </div>
+              <div className="stat-card">
+                <strong>{stats.glowPlugCount}</strong>
+                <span>Calentadores diésel</span>
+              </div>
+              <div className="stat-card">
                 <strong>{formatRateValue(exchangeRates.usd_ves)}</strong>
                 <span>USD → VES · {rateSource}</span>
               </div>
               <div className="stat-card">
                 <strong>{formatRateValue(exchangeRates.eur_ves)}</strong>
                 <span>EUR → VES · actualiza diario</span>
+              </div>
             </div>
           </div>
-        </div>
         </section>
 
         <section className="contact-strip">
           <article className="contact-card whatsapp-card">
             <strong>WhatsApp ventas</strong>
-            <p>Botón flotante y acceso directo para cotizaciones, Zelle y seguimiento postventa.</p>
+            <p>Acceso directo para cotizaciones, Zelle, seguimiento postventa y despacho.</p>
             <a href={floatingWhatsAppUrl} rel="noreferrer" target="_blank">
               Escribir por WhatsApp
             </a>
@@ -813,74 +878,97 @@ export default function Storefront() {
             </div>
           </article>
           <article className="contact-card theme-card">
-            <strong>Landing moderna y adaptable</strong>
+            <strong>{isAdmin ? "Modo administrador detectado" : "Experiencia autenticada"}</strong>
             <p>
-              Tema claro/oscuro/sistema, diseño responsive para Android/iOS y acciones rápidas de
-              contacto y checkout.
+              {currentUser
+                ? `Cuenta activa para ${currentUser.name}${currentUser.business ? ` · ${currentUser.business}` : ""}.`
+                : "Inicia sesión para reutilizar datos en contacto y cotizaciones express."}
             </p>
           </article>
         </section>
 
         <section className="content-grid branded-content">
-        <div className="panel">
-          <div className="section-heading">
-            <div>
-              <h2>Marcas aliadas principales</h2>
-              <p>
-                Presentamos las marcas con mayor salida en mostrador para bujías, calentadores y
-                repuestos de encendido ofrecidos por Turbobujias.
-              </p>
+          <div className="panel">
+            <div className="section-heading">
+              <div>
+                <h2>Marcas aliadas principales</h2>
+                <p>Identidad visual SVG para las marcas con mayor salida en mostrador y compatibilidad rápida.</p>
+              </div>
+              <span className="tag">Brand kit</span>
             </div>
-            <span className="tag">Ventas destacadas</span>
+
+            <div className="partner-grid brand-showcase-grid">
+              {featuredBrands.map((brandItem) => (
+                <article className="brand-card brand-icon-card" key={brandItem.name}>
+                  <Image alt={`Logo ${brandItem.name}`} height={54} src={brandItem.icon} width={136} />
+                  <div className="brand-card-header">
+                    <strong>{brandItem.name}</strong>
+                    <span className="pill">{brandItem.inventoryCount} SKU(s)</span>
+                  </div>
+                  <p>{brandItem.description}</p>
+                  <button className="button-secondary" onClick={() => setBrand(brandItem.name)} type="button">
+                    Filtrar {brandItem.name}
+                  </button>
+                </article>
+              ))}
+            </div>
           </div>
 
-          <div className="partner-grid">
-            {featuredBrands.map((brandItem) => (
-              <article className="brand-card" key={brandItem.name}>
-                <div className="brand-card-header">
-                  <div className="brand-mark">{brandItem.name.slice(0, 2).toUpperCase()}</div>
-                  <strong>{brandItem.name}</strong>
+          <div className="panel">
+            <div className="section-heading">
+              <div>
+                <h2>Opiniones de clientes</h2>
+                <p>Comentarios en español de clientes de mostrador, talleres y compradores frecuentes.</p>
+              </div>
+              <span className="tag">Feedback real</span>
+            </div>
+            <div className="reviews-grid">
+              {CUSTOMER_REVIEWS.map((review) => (
+                <article className="review-card" key={review.name}>
+                  <p>“{review.quote}”</p>
+                  <div className="review-author">
+                    <strong>{review.name}</strong>
+                    <span>{review.location}</span>
+                  </div>
+                </article>
+              ))}
+            </div>
+          </div>
+        </section>
+
+        <section className="panel diesel-panel">
+          <div className="section-heading">
+            <div>
+              <h2>Sección repuestos diésel</h2>
+              <p>Atención prioritaria para calentadores, inyectores, bombas y filtros con salida a cotización inmediata.</p>
+            </div>
+            <span className="tag">Diésel</span>
+          </div>
+          <div className="diesel-grid">
+            {DIESEL_PART_CATEGORIES.map((categoryItem) => (
+              <article className="diesel-card" key={categoryItem.slug}>
+                <strong>{categoryItem.title}</strong>
+                <p>{categoryItem.detail}</p>
+                <div className="actions-row">
+                  <button className="button-secondary" onClick={() => handleDieselCategory(categoryItem)} type="button">
+                    Solicitar cotización
+                  </button>
+                  <a href={buildWhatsAppUrl(whatsappUrl, categoryItem.ctaMessage)} rel="noreferrer" target="_blank">
+                    WhatsApp
+                  </a>
                 </div>
-                <p>{brandItem.description}</p>
               </article>
             ))}
           </div>
-        </div>
-
-        <div className="panel">
-          <div className="section-heading">
-            <div>
-              <h2>Opiniones de clientes</h2>
-              <p>
-                Comentarios en español de clientes de mostrador, talleres y compradores frecuentes.
-              </p>
-            </div>
-            <span className="tag">Feedback real</span>
-          </div>
-
-          <div className="reviews-grid">
-            {CUSTOMER_REVIEWS.map((review) => (
-              <article className="review-card" key={review.name}>
-                <p>“{review.quote}”</p>
-                <div className="review-author">
-                  <strong>{review.name}</strong>
-                  <span>{review.location}</span>
-                </div>
-              </article>
-            ))}
-          </div>
-        </div>
         </section>
 
         <section className="content-grid">
-        <div className="panel">
-          <h2>Búsqueda inteligente</h2>
-          <p>
-            Filtra por SKU, UPC, marca, categoría y vehículo para encontrar el repuesto exacto.
-          </p>
+          <div className="panel">
+            <h2>Búsqueda inteligente</h2>
+            <p>Filtra por SKU, UPC, marca, categoría y vehículo para encontrar el repuesto exacto.</p>
 
-          <div className="field-group">
-            <label htmlFor="search">Buscar por SKU, UPC o aplicación</label>
+            <div className="field-group">
+              <label htmlFor="search">Buscar por SKU, UPC o aplicación</label>
               <div className="search-input-row">
                 <input
                   id="search"
@@ -888,14 +976,14 @@ export default function Storefront() {
                   placeholder="Ej. NGK-BKR5E, 070185924508, Corolla 1.8..."
                   value={query}
                 />
-                <button className="button-primary search-submit-button" onClick={scrollToCatalog} type="button">
+                <button className="button-primary search-submit-button" onClick={() => scrollToSection("catalog-section")} type="button">
                   Buscar
                 </button>
               </div>
             </div>
 
             <div className="actions-row search-actions-row">
-              <a className="button-secondary" href={instagramSearchUrl} rel="noreferrer" target="_blank">
+              <a className="button-secondary text-button" href={instagramSearchUrl} rel="noreferrer" target="_blank">
                 Buscar en Instagram
               </a>
               <button className="button-secondary" onClick={handleSearchConsult} type="button">
@@ -903,72 +991,68 @@ export default function Storefront() {
               </button>
             </div>
 
-          {suggestions.length > 0 ? (
-            <ul className="autocomplete">
-              {suggestions.map((item) => (
-                <li key={item.sku}>
-                  <button onClick={() => setQuery(item.sku)} type="button">
-                    <strong>{item.sku}</strong> · {item.brand} {item.model}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          ) : null}
-
-          <div className="filters-grid">
-            <div className="field-group">
-              <label htmlFor="brand">Marca</label>
-              <select id="brand" onChange={(event) => setBrand(event.target.value)} value={brand}>
-                <option value="all">Todas</option>
-                {brands.map((brandName) => (
-                  <option key={brandName} value={brandName}>
-                    {brandName}
-                  </option>
+            {suggestions.length > 0 ? (
+              <ul className="autocomplete">
+                {suggestions.map((item) => (
+                  <li key={item.sku}>
+                    <button onClick={() => setQuery(item.sku)} type="button">
+                      <strong>{item.sku}</strong> · {item.brand} {item.model}
+                    </button>
+                  </li>
                 ))}
-              </select>
-            </div>
+              </ul>
+            ) : null}
 
-            <div className="field-group">
-              <label htmlFor="category">Categoría</label>
-              <select
-                id="category"
-                onChange={(event) => setCategory(event.target.value)}
-                value={category}
-              >
-                <option value="all">Todas</option>
-                <option value="spark_plug">Bujías</option>
-                <option value="diesel_glow_plug">Calentadores</option>
-              </select>
-            </div>
+            <div className="filters-grid">
+              <div className="field-group">
+                <label htmlFor="brand">Marca</label>
+                <select id="brand" onChange={(event) => setBrand(event.target.value)} value={brand}>
+                  <option value="all">Todas</option>
+                  {brands.map((brandName) => (
+                    <option key={brandName} value={brandName}>
+                      {brandName}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-            <div className="field-group">
-              <label htmlFor="vehicle">Vehículo / motor</label>
-              <input
-                id="vehicle"
-                onChange={(event) => setVehicle(event.target.value)}
-                placeholder="Hilux 2.4 Diesel, Civic 1.6..."
-                value={vehicle}
-              />
-            </div>
+              <div className="field-group">
+                <label htmlFor="category">Categoría</label>
+                <select id="category" onChange={(event) => setCategory(event.target.value)} value={category}>
+                  <option value="all">Todas</option>
+                  <option value="spark_plug">Bujías</option>
+                  <option value="diesel_glow_plug">Calentadores</option>
+                </select>
+              </div>
 
-            <div className="field-group">
-              <label htmlFor="clear">Acciones</label>
-              <button
-                className="button-secondary"
-                id="clear"
-                onClick={() => {
-                  setQuery("");
-                  setBrand("all");
-                  setCategory("all");
-                  setVehicle("");
-                }}
-                type="button"
-              >
-                Limpiar filtros
-              </button>
+              <div className="field-group">
+                <label htmlFor="vehicle">Vehículo / motor</label>
+                <input
+                  id="vehicle"
+                  onChange={(event) => setVehicle(event.target.value)}
+                  placeholder="Hilux 2.4 Diesel, Civic 1.6..."
+                  value={vehicle}
+                />
+              </div>
+
+              <div className="field-group">
+                <label htmlFor="clear">Acciones</label>
+                <button
+                  className="button-secondary"
+                  id="clear"
+                  onClick={() => {
+                    setQuery("");
+                    setBrand("all");
+                    setCategory("all");
+                    setVehicle("");
+                  }}
+                  type="button"
+                >
+                  Limpiar filtros
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
           <CartPanel
             currencyMode={currencyMode}
@@ -979,34 +1063,25 @@ export default function Storefront() {
         </section>
 
         <section className="support-grid" style={{ marginTop: "1.5rem" }}>
-        <div className="support-card">
-          <h3>Panel rápido de ventas</h3>
-          <p>
-            Ideal para talleres y ventas al mostrador: consulta inventario, detecta stock bajo y
-            genera cotizaciones rápidas en doble moneda.
-          </p>
-          <ul className="feature-list">
-            <li>Integración lista para Pago Móvil, transferencias y PayPal.</li>
-            <li>Carrito con Redux Toolkit y actualización instantánea.</li>
-            <li>Preparado para sincronizarse con Mercado Libre.</li>
-          </ul>
-        </div>
+          <div className="support-card">
+            <h3>Panel rápido de ventas</h3>
+            <p>Ideal para talleres y ventas al mostrador: consulta inventario, detecta stock bajo y genera cotizaciones rápidas en doble moneda.</p>
+            <ul className="feature-list">
+              <li>Integración lista para Pago Móvil, transferencias y PayPal.</li>
+              <li>Carrito con Redux Toolkit y actualización instantánea.</li>
+              <li>Autenticación local persistida para clientes y administradores.</li>
+            </ul>
+          </div>
 
-        <div className="scanner-card">
-          <h3>Scanner QR / Código de barras</h3>
-          <p>
-            Usa la cámara para capturar el UPC/SKU de una caja y completar la búsqueda
-            automáticamente.
-          </p>
-          <QrScanner onDetected={setQuery} />
-        </div>
+          <div className="scanner-card">
+            <h3>Scanner QR / Código de barras</h3>
+            <p>Usa la cámara para capturar el UPC/SKU de una caja y completar la búsqueda automáticamente.</p>
+            <QrScanner onDetected={setQuery} />
+          </div>
+
           <div className="support-card">
             <h3>Tasa BCV, entorno local e integración</h3>
-            <p>
-              La app puede apuntar a localhost, a la IP local del backend para pruebas móviles o a
-              una URL pública en producción mediante variables de entorno y mostrar tasas BCV en
-              USD, EUR y VES con refresh diario.
-            </p>
+            <p>La app apunta a localhost, IP local o URL pública mediante variables de entorno y muestra tasas BCV con refresh diario.</p>
             <ul className="feature-list">
               <li>
                 Local: <code>NEXT_PUBLIC_API_URL=http://localhost:3001/api</code>.
@@ -1038,71 +1113,74 @@ export default function Storefront() {
           </div>
         </section>
 
+        <div style={{ marginTop: "1.5rem" }}>
+          <ContactForms
+            authenticatedUser={currentUser}
+            buildWhatsAppUrl={buildWhatsAppUrl}
+            quoteSeed={quoteSeed}
+            whatsappUrl={whatsappUrl}
+          />
+        </div>
+
         <section style={{ marginTop: "1.5rem" }}>
           <AiChatbot />
         </section>
 
         <section id="catalog-section" style={{ marginTop: "1.5rem" }}>
-        <div className="panel">
-          <h2>Catálogo disponible</h2>
-          <p>
-            {filteredItems.length} resultado(s) · {stats.lowStockCount} producto(s) con stock bajo.
-          </p>
+          <div className="panel">
+            <h2>Catálogo disponible</h2>
+            <p>
+              {filteredItems.length} resultado(s) · {stats.lowStockCount} producto(s) con stock bajo.
+            </p>
 
-          {isLoading ? (
-            <div className="empty-state">
-              <p>Cargando inventario desde el backend…</p>
-            </div>
-          ) : error ? (
-            <div className="empty-state">
-              <p>{error}</p>
-            </div>
-          ) : filteredItems.length === 0 ? (
-            <div className="empty-state">
-              <p>No se encontraron repuestos con los filtros actuales.</p>
-            </div>
-          ) : (
-            <div className="product-grid">
-              {filteredItems.map((item) => (
-                <InventoryCard
-                  currencyMode={currencyMode}
-                  item={item}
-                  key={item.sku}
-                  onAdd={(selectedItem) => dispatch(addToCart(selectedItem))}
-                  onConsult={handleConsultWithAI}
-                />
-              ))}
-            </div>
-          )}
-        </div>
+            {isLoading ? (
+              <div className="empty-state">
+                <p>Cargando inventario desde el backend…</p>
+              </div>
+            ) : error ? (
+              <div className="empty-state">
+                <p>{error}</p>
+              </div>
+            ) : filteredItems.length === 0 ? (
+              <div className="empty-state">
+                <p>No se encontraron repuestos con los filtros actuales.</p>
+              </div>
+            ) : (
+              <div className="product-grid">
+                {filteredItems.map((item) => (
+                  <InventoryCard
+                    currencyMode={currencyMode}
+                    item={item}
+                    key={item.sku}
+                    onAdd={(selectedItem) => dispatch(addToCart(selectedItem))}
+                    onConsult={handleConsultWithAI}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
         </section>
 
         <p className="footer-note">
-          Frontend Next.js listo para trabajar con localhost, IP local, URL pública y checkout
-          asistido en una experiencia responsive.
+          Frontend Next.js listo para autenticación modal, catálogo, cotizaciones asistidas y checkout por WhatsApp.
         </p>
       </main>
 
       <div className="floating-contact-dock" aria-label="Accesos rápidos de contacto">
-        <a
-          aria-label="Contactar por WhatsApp"
-          className="floating-button whatsapp"
-          href={floatingWhatsAppUrl}
-          rel="noreferrer"
-          target="_blank"
-        >
+        <a aria-label="Contactar por WhatsApp" className="floating-button whatsapp" href={floatingWhatsAppUrl} rel="noreferrer" target="_blank">
           WA
         </a>
-        <a
-          aria-label="Abrir Instagram"
-          className="floating-button instagram"
-          href={instagramUrl}
-          rel="noreferrer"
-          target="_blank"
-        >
+        <a aria-label="Abrir Instagram" className="floating-button instagram" href={instagramUrl} rel="noreferrer" target="_blank">
           IG
         </a>
       </div>
+
+      <AuthModal
+        isOpen={isAuthModalOpen}
+        mode={authMode}
+        onClose={() => setIsAuthModalOpen(false)}
+        onModeChange={setAuthMode}
+      />
     </>
   );
 }
