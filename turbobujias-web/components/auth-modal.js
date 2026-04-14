@@ -12,6 +12,7 @@ import {
 } from "../lib/authSlice";
 
 const AUTH_STORAGE_KEY = "tb-auth-state";
+const PASSWORD_HASH_ITERATIONS = 600000;
 
 function sanitizePersistedPayload(payload) {
   if (!payload || typeof payload !== "object") {
@@ -39,7 +40,7 @@ async function hashPassword(password) {
       name: "PBKDF2",
       hash: "SHA-256",
       salt: saltBuffer,
-      iterations: 120000,
+      iterations: PASSWORD_HASH_ITERATIONS,
     },
     keyMaterial,
     256
@@ -71,7 +72,7 @@ async function hashPasswordWithSalt(password, passwordSalt) {
       name: "PBKDF2",
       hash: "SHA-256",
       salt: saltBuffer,
-      iterations: 120000,
+      iterations: PASSWORD_HASH_ITERATIONS,
     },
     keyMaterial,
     256

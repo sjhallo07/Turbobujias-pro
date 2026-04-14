@@ -29,10 +29,7 @@ export function detectAdminFromEmail(email) {
   }
 
   const [localPart = "", domain = ""] = normalizedEmail.split("@");
-  return Boolean(
-    ADMIN_LOCAL_PART_PATTERN.test(localPart) ||
-      (ADMIN_DOMAINS.has(domain) && ADMIN_LOCAL_PART_PATTERN.test(localPart))
-  );
+  return Boolean(ADMIN_LOCAL_PART_PATTERN.test(localPart) || ADMIN_DOMAINS.has(domain));
 }
 
 function sanitizeStoredUser(user) {

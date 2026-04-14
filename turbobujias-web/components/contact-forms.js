@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+const DIRECT_WHATSAPP_MESSAGE = "Hola, necesito ayuda con un pedido en Turbobujias Pro.";
+
 function openWhatsAppWindow(url) {
   if (typeof window === "undefined") {
     return;
@@ -145,7 +147,7 @@ export default function ContactForms({ authenticatedUser, quoteSeed, whatsappUrl
             <button className="button-primary" type="submit">
               Enviar por WhatsApp
             </button>
-            <a className="button-secondary text-button" href={buildWhatsAppUrl(whatsappUrl, "Hola, necesito ayuda con un pedido en Turbobujias Pro.")} rel="noreferrer" target="_blank">
+            <a className="button-secondary text-button" href={buildWhatsAppUrl(whatsappUrl, DIRECT_WHATSAPP_MESSAGE)} rel="noreferrer" target="_blank">
               Abrir chat directo
             </a>
           </div>
