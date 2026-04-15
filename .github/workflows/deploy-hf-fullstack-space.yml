@@ -1,0 +1,60 @@
+name: Deploy Hugging Face Full Stack Space
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - 'backend/**'
+      - 'turbobujias-web/**'
+      - 'turbobujias-ai/**'
+      - 'deploy/huggingface-fullstack-space/**'
+      - 'scripts/prepare-hf-fullstack-space.mjs'
+      - 'package.json'
+      - '.github/workflows/deploy-hf-fullstack-space.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    name: Publish Docker Space bundle
+    runs-on: ubuntu-latest
+    if: ${{ secrets.HF_TOKEN != '' && secrets.HF_USERNAME != '' && secrets.HF_SPACE_REPO_ID != '' }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Prepare Hugging Face bundle
+        run: node scripts/prepare-hf-fullstack-space.mjs
+
+      - name: Publish bundle to Hugging Face Space
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_USERNAME: ${{ secrets.HF_USERNAME }}
+          HF_SPACE_REPO_ID: ${{ secrets.HF_SPACE_REPO_ID }}
+          GITHUB_SHA: ${{ github.sha }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          DEPLOY_DIR="$(mktemp -d)"
+          rsync -a --delete dist/hf-fullstack-space/ "$DEPLOY_DIR/"
+          cd "$DEPLOY_DIR"
+          git init -b main
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .
+          if git diff --cached --quiet; then
+            echo "No deployment changes detected"
+            exit 0
+          fi
+          git commit -m "Deploy from ${GITHUB_REPOSITORY}@${GITHUB_SHA}"
+          git remote add origin "https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO_ID}"
+          git push --force origin main

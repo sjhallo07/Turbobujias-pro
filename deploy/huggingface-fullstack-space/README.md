@@ -41,3 +41,15 @@ Set these in the Hugging Face Space settings as needed:
 ## Build notes
 
 The Docker image builds the storefront, installs the backend and chatbot dependencies, and serves everything through Nginx on port `7860`.
+
+## Deploy from this repository with GitHub Actions
+
+This repository can publish the Docker Space bundle directly to Hugging Face using the workflow `deploy-hf-fullstack-space.yml`.
+
+Required GitHub Actions secrets:
+
+- `HF_TOKEN` — Hugging Face write token with access to the target Space repository
+- `HF_USERNAME` — Hugging Face username or org that owns the Space
+- `HF_SPACE_REPO_ID` — Space repo id, for example `sjhallo07/turbobujias-fullstack`
+
+The workflow prepares `dist/hf-fullstack-space/` and force-pushes that generated bundle to the target Docker Space repository.
