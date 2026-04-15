@@ -5,7 +5,10 @@
     "workbench.editor.autoLockGroups": {
         "mainThreadWebview-markdown.preview": true,
         "workbench.input.interactive": true,
-        "java.formatterSettingsEditor": true
+        "java.formatterSettingsEditor": true,
+        "default": true,
+        "notebookOutputEditor": true,
+        "jupyter-notebook": true
     },
     "problems.showCurrentInStatus": true,
     "editor.formatOnSave": true,

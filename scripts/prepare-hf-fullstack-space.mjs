@@ -14,6 +14,7 @@ const includePaths = [
   'turbobujias-ai',
   path.join('deploy', 'huggingface-fullstack-space', 'Dockerfile'),
   path.join('deploy', 'huggingface-fullstack-space', 'README.md'),
+  path.join('deploy', 'huggingface-fullstack-space', 'deploy_hf_fullstack_space.ipynb'),
   path.join('deploy', 'huggingface-fullstack-space', 'docker'),
 ];
 
