@@ -10,6 +10,7 @@
     "sync:inventory": "node scripts/sync-inventory.mjs",
     "check:inventory": "node scripts/sync-inventory.mjs --check",
     "import:inventory": "python backend/scripts/import_inventory_from_excel.py",
+    "prepare:hf-fullstack-space": "node scripts/prepare-hf-fullstack-space.mjs",
     "dev:backend": "npm --prefix backend run dev",
     "start:backend": "npm --prefix backend run start",
     "dev:frontend": "npm --prefix turbobujias-web run dev",

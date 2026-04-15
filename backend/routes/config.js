@@ -24,12 +24,30 @@ function resolveBackendPublicUrl(req) {
     return `${req.protocol}://${req.get('host')}`;
 }
 
-function resolveFrontendPublicUrl() {
-    return normalizeBaseUrl(process.env.FRONTEND_PUBLIC_URL);
+function resolveFrontendPublicUrl(req) {
+    const configured = normalizeBaseUrl(process.env.FRONTEND_PUBLIC_URL);
+    if (configured) {
+        return configured;
+    }
+
+    return `${req.protocol}://${req.get('host')}`;
 }
 
-function buildFrontendRedirect(pathname) {
-    const frontendBaseUrl = resolveFrontendPublicUrl();
+function resolveChatbotPublicUrl(req) {
+    const configured = String(process.env.CHATBOT_PUBLIC_URL || '').trim();
+    if (!configured) {
+        return 'https://sjhallo07-turbobujias-ai.hf.space';
+    }
+
+    if (/^https?:\/\//i.test(configured)) {
+        return normalizeBaseUrl(configured);
+    }
+
+    return `${resolveBackendPublicUrl(req)}${normalizePath(configured, '/chatbot')}`;
+}
+
+function buildFrontendRedirect(req, pathname) {
+    const frontendBaseUrl = resolveFrontendPublicUrl(req);
     if (!frontendBaseUrl) {
         return '';
     }
@@ -39,10 +57,8 @@ function buildFrontendRedirect(pathname) {
 
 router.get('/public', (req, res) => {
     const backendPublicUrl = resolveBackendPublicUrl(req);
-    const frontendPublicUrl = resolveFrontendPublicUrl();
-    const chatbotPublicUrl =
-        normalizeBaseUrl(process.env.CHATBOT_PUBLIC_URL) ||
-        'https://sjhallo07-turbobujias-ai.hf.space';
+    const frontendPublicUrl = resolveFrontendPublicUrl(req);
+    const chatbotPublicUrl = resolveChatbotPublicUrl(req);
 
     res.json({
         backend: {
@@ -74,9 +90,11 @@ router.get('/public', (req, res) => {
                 providerUrl: process.env.PAYPAL_URL || 'https://www.paypal.com/',
                 ipnCallbackUrl: `${backendPublicUrl}/api/payments/paypal`,
                 successRedirectUrl: buildFrontendRedirect(
+                    req,
                     process.env.PAYPAL_SUCCESS_PATH || '/?payment=paypal-success'
                 ),
                 cancelRedirectUrl: buildFrontendRedirect(
+                    req,
                     process.env.PAYPAL_CANCEL_PATH || '/?payment=paypal-cancel'
                 ),
             },
@@ -84,6 +102,7 @@ router.get('/public', (req, res) => {
                 enabled: true,
                 callbackUrl: `${backendPublicUrl}/api/payments/pagomovil`,
                 pendingRedirectUrl: buildFrontendRedirect(
+                    req,
                     process.env.PAGOMOVIL_PENDING_PATH || '/?payment=pagomovil-pending'
                 ),
             },

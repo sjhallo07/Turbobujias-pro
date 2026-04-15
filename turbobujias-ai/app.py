@@ -236,6 +236,15 @@ def detect_response_language(text: str) -> str:
 
     return "es"
 
+
+def normalize_mount_path(value: str | None) -> str:
+    raw = str(value or "/").strip()
+    if not raw:
+        return "/"
+    if raw == "/":
+        return "/"
+    return raw if raw.startswith("/") else f"/{raw}"
+
 # ─────────────────────────────────────────────
 # 0. Validate required environment variables
 # ─────────────────────────────────────────────
@@ -1132,7 +1141,11 @@ with gr.Blocks(title="Turbobujias AI Assistant", theme=gr.themes.Soft()) as demo
     )
 
 
-app = gr.mount_gradio_app(api_app, demo, path="/")
+app = gr.mount_gradio_app(
+    api_app,
+    demo,
+    path=normalize_mount_path(os.environ.get("GRADIO_MOUNT_PATH", "/")),
+)
 
 if __name__ == "__main__":
     demo.queue(default_concurrency_limit=2)

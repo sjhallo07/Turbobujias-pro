@@ -143,6 +143,8 @@ The Space already includes the files Hugging Face expects:
 2. Install dependencies with `pip install -r requirements.txt`
 3. Start the app with `python app.py`
 
+The local and Space environments should use the same Gradio major version as the Space metadata (`sdk_version: 6.12.0`) to avoid dependency conflicts during Hugging Face builds.
+
 The app will bind to `0.0.0.0` and use `PORT` when provided by the platform.
 
 ### Recommended Python environment for this repository

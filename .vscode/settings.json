@@ -28,5 +28,38 @@
             "packageManager": "ms-python.python:pip"
         }
     ],
-    "markdown.showToolbar": true
+    "markdown.showToolbar": true,
+    "chat.mcp.serverSampling": {
+        "Turbobujias-pro/.vscode/mcp.json: my-mcp-server-607bb799": {
+            "allowedModels": [
+                "copilot/auto",
+                "copilotcli/gpt-5.4",
+                "copilot/gemini-2.5-pro",
+                "copilot/gemini-3-flash-preview",
+                "copilot/gemini-3.1-pro-preview",
+                "copilotcli/gpt-4.1",
+                "copilot/gpt-4.1",
+                "copilot/gpt-4o",
+                "copilotcli/gpt-5-mini",
+                "copilot/gpt-5-mini",
+                "copilotcli/gpt-5.1",
+                "copilot/gpt-5.1",
+                "copilotcli/gpt-5.2",
+                "copilot/gpt-5.2",
+                "copilotcli/gpt-5.2-codex",
+                "copilot/gpt-5.2-codex",
+                "copilotcli/gpt-5.3-codex",
+                "copilot/gpt-5.3-codex",
+                "copilot/gpt-5.4",
+                "copilotcli/gpt-5.4-mini",
+                "copilot/gpt-5.4-mini",
+                "copilot/grok-code-fast-1",
+                "copilot/oswe-vscode-prime"
+            ]
+        }
+    },
+    "github.copilot.chat.agent.autoFix": true,
+    "github.copilot.chat.additionalReadAccessPaths": [
+        "\"C:\\Users\\ASUS\\tbai\""
+    ]
 }
