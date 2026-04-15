@@ -21,7 +21,10 @@ jobs:
   deploy:
     name: Publish Docker Space bundle
     runs-on: ubuntu-latest
-    if: ${{ secrets.HF_TOKEN != '' && secrets.HF_USERNAME != '' && secrets.HF_SPACE_REPO_ID != '' }}
+    if: ${{ secrets.HF_TOKEN != '' }}
+    env:
+      HF_SPACE_REPO_ID: sjhallo07/turbobujias-fullstack
+      HF_SPACE_PUBLIC_URL: https://sjhallo07-turbobujias-fullstack.hf.space
 
     steps:
       - name: Checkout code
@@ -38,12 +41,13 @@ jobs:
       - name: Publish bundle to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_USERNAME: ${{ secrets.HF_USERNAME }}
-          HF_SPACE_REPO_ID: ${{ secrets.HF_SPACE_REPO_ID }}
+          HF_SPACE_REPO_ID: ${{ env.HF_SPACE_REPO_ID }}
+          HF_SPACE_PUBLIC_URL: ${{ env.HF_SPACE_PUBLIC_URL }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
+          HF_OWNER="${HF_SPACE_REPO_ID%%/*}"
           DEPLOY_DIR="$(mktemp -d)"
           rsync -a --delete dist/hf-fullstack-space/ "$DEPLOY_DIR/"
           cd "$DEPLOY_DIR"
@@ -56,5 +60,8 @@ jobs:
             exit 0
           fi
           git commit -m "Deploy from ${GITHUB_REPOSITORY}@${GITHUB_SHA}"
-          git remote add origin "https://${HF_USERNAME}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO_ID}"
+          git remote add origin "https://${HF_OWNER}:${HF_TOKEN}@huggingface.co/spaces/${HF_SPACE_REPO_ID}"
           git push --force origin main
+
+      - name: Show deployed public URL
+        run: echo "Expected public URL: $HF_SPACE_PUBLIC_URL"

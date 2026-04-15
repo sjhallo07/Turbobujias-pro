@@ -20,6 +20,10 @@ This Space runs the full Turbobujias stack behind a single public URL:
 
 ## Public routes
 
+Expected public base URL for the repository-managed Space:
+
+- `https://sjhallo07-turbobujias-fullstack.hf.space`
+
 - `/` — storefront
 - `/api/*` — backend API
 - `/api/ai-chat` — Next.js chatbot proxy
@@ -48,8 +52,10 @@ This repository can publish the Docker Space bundle directly to Hugging Face usi
 
 Required GitHub Actions secrets:
 
-- `HF_TOKEN` — Hugging Face write token with access to the target Space repository
-- `HF_USERNAME` — Hugging Face username or org that owns the Space
-- `HF_SPACE_REPO_ID` — Space repo id, for example `sjhallo07/turbobujias-fullstack`
+- `HF_TOKEN` — Hugging Face write token with access to `sjhallo07/turbobujias-fullstack`
 
-The workflow prepares `dist/hf-fullstack-space/` and force-pushes that generated bundle to the target Docker Space repository.
+The workflow prepares `dist/hf-fullstack-space/` and force-pushes that generated bundle to the exact Docker Space repository `sjhallo07/turbobujias-fullstack`.
+
+After a successful workflow run, the expected public URL is:
+
+- `https://sjhallo07-turbobujias-fullstack.hf.space`
