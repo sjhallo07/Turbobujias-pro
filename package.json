@@ -7,8 +7,16 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "dev:backend": "cd backend && npm run dev",
-    "start:backend": "cd backend && npm start"
+    "dev:backend": "npm --prefix backend run dev",
+    "start:backend": "npm --prefix backend run start",
+    "dev:frontend": "npm --prefix turbobujias-web run dev",
+    "build:frontend": "npm --prefix turbobujias-web run build",
+    "start:frontend": "npm --prefix turbobujias-web run start",
+    "dev:chatbot": "node scripts/dev-stack.mjs --only chatbot --chatbot local",
+    "dev:all": "node scripts/dev-stack.mjs",
+    "dev:all:remote-chatbot": "node scripts/dev-stack.mjs --chatbot remote",
+    "dev:all:local-chatbot": "node scripts/dev-stack.mjs --chatbot local",
+    "dev:help": "node scripts/dev-stack.mjs --help"
   },
   "dependencies": {
     "@gradio/client": "^0.15.1",

@@ -16,7 +16,7 @@ import re
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import gradio as gr
 import requests
@@ -114,6 +114,128 @@ def env_bool(name: str, default: bool = False) -> bool:
         return False
     return default
 
+
+DEFAULT_SYSTEM_PROMPT = (
+    "You are Turbobujias AI Assistant, a specialist in spark plugs, glow plugs, diesel parts, "
+    "SKU/UPC matching, and vehicle compatibility for the Venezuelan market. "
+    "Use the catalog context as the primary source of truth. "
+    "Before answering, silently self-check for contradictions, missing fitment details, and invented part numbers. "
+    "If the catalog is insufficient or the application is ambiguous, say so clearly and ask for the minimum follow-up details needed, "
+    "such as brand, model, engine, fuel type, or year. "
+    "Prefer concise, practical answers with exact SKU references when available, short comparisons when useful, and a brief note about uncertainty when needed."
+)
+DEFAULT_SYSTEM_PROMPT_CANDIDATES = (
+    APP_DIR.parent / "docs" / "chatbot" / "turbobujias_system_prompt_multilingual.md",
+    APP_DIR.parent / "docs" / "chatbot" / "turbobujias_system_prompt_multilingual.txt",
+)
+_configured_prompt_path = os.environ.get("SYSTEM_PROMPT_PATH", "").strip()
+SYSTEM_PROMPT_PATH = (
+    Path(_configured_prompt_path).expanduser()
+    if _configured_prompt_path
+    else next(
+        (
+            candidate
+            for candidate in DEFAULT_SYSTEM_PROMPT_CANDIDATES
+            if candidate.exists() and candidate.is_file()
+        ),
+        DEFAULT_SYSTEM_PROMPT_CANDIDATES[0],
+    )
+)
+
+
+def load_system_prompt(prompt_path: Path) -> str:
+    if not prompt_path.exists() or not prompt_path.is_file():
+        _log.warning(
+            "System prompt file not found at %s; falling back to the bundled default prompt.",
+            prompt_path,
+        )
+        return DEFAULT_SYSTEM_PROMPT
+
+    try:
+        prompt_text = prompt_path.read_text(encoding="utf-8").strip()
+    except OSError as exc:
+        _log.warning(
+            "Could not read system prompt file at %s (%s); falling back to the bundled default prompt.",
+            prompt_path,
+            exc,
+        )
+        return DEFAULT_SYSTEM_PROMPT
+
+    if prompt_text:
+        _log.info("Loaded system prompt from %s", prompt_path)
+        return prompt_text
+
+    _log.warning(
+        "System prompt file at %s is empty; falling back to the bundled default prompt.",
+        prompt_path,
+    )
+
+    return DEFAULT_SYSTEM_PROMPT
+
+
+SPANISH_HINT_TOKENS: frozenset[str] = frozenset(
+    {
+        "bujia",
+        "bujía",
+        "calentador",
+        "compatibilidad",
+        "cotizacion",
+        "cotización",
+        "carro",
+        "vehiculo",
+        "vehículo",
+        "marca",
+        "modelo",
+        "motor",
+        "ano",
+        "año",
+        "para",
+        "sirve",
+        "mano",
+        "pana",
+        "compa",
+        "hermano",
+        "rey",
+        "en cuanto",
+        "en bs",
+        "divisas",
+    }
+)
+ENGLISH_HINT_TOKENS: frozenset[str] = frozenset(
+    {
+        "spark plug",
+        "glow plug",
+        "fitment",
+        "compatibility",
+        "vehicle",
+        "engine",
+        "make",
+        "model",
+        "year",
+        "fuel",
+        "which",
+        "what product",
+        "matches",
+        "lookup",
+        "barcode",
+    }
+)
+
+
+def detect_response_language(text: str) -> str:
+    lowered = text.casefold()
+
+    if any(marker in text for marker in ("¿", "¡")) or re.search(r"[áéíóúñ]", lowered):
+        return "es"
+
+    spanish_hits = sum(token in lowered for token in SPANISH_HINT_TOKENS)
+    english_hits = sum(token in lowered for token in ENGLISH_HINT_TOKENS)
+
+    if english_hits > spanish_hits:
+        return "en"
+
+    return "es"
+
 # ─────────────────────────────────────────────
 # 0. Validate required environment variables
 # ─────────────────────────────────────────────
@@ -156,6 +278,72 @@ configured_providers = {
     "huggingface": bool(HF_TOKEN),
     "gemini": bool(GEMINI_API_KEY),
 }
+
+
+def get_provider_execution_order() -> list[str]:
+    preferred_order: list[str] = []
+
+    if LLM_PROVIDER == "github":
+        if configured_providers["github"]:
+            preferred_order.append("github")
+        if GEMINI_FALLBACK_ENABLED and configured_providers["gemini"]:
+            preferred_order.append("gemini")
+        if configured_providers["huggingface"]:
+            preferred_order.append("huggingface")
+    elif LLM_PROVIDER == "gemini":
+        if configured_providers["gemini"]:
+            preferred_order.append("gemini")
+        if configured_providers["github"]:
+            preferred_order.append("github")
+        if configured_providers["huggingface"]:
+            preferred_order.append("huggingface")
+    else:
+        if configured_providers["huggingface"]:
+            preferred_order.append("huggingface")
+        if configured_providers["github"]:
+            preferred_order.append("github")
+        if GEMINI_FALLBACK_ENABLED and configured_providers["gemini"]:
+            preferred_order.append("gemini")
+
+    for provider_name in ("github", "gemini", "huggingface"):
+        if provider_name == "gemini" and not GEMINI_FALLBACK_ENABLED and LLM_PROVIDER != "gemini":
+            continue
+        if configured_providers[provider_name] and provider_name not in preferred_order:
+            preferred_order.append(provider_name)
+
+    return preferred_order
+
+
+def extract_gemini_text(payload: dict[str, Any]) -> str:
+    candidates = payload.get("candidates", [])
+    if isinstance(candidates, list):
+        for candidate in candidates:
+            if not isinstance(candidate, dict):
+                continue
+
+            content = candidate.get("content", {})
+            if not isinstance(content, dict):
+                continue
+
+            parts = content.get("parts", [])
+            if not isinstance(parts, list):
+                continue
+
+            texts = [
+                str(part.get("text", "")).strip()
+                for part in parts
+                if isinstance(part, dict) and str(part.get("text", "")).strip()
+            ]
+            if texts:
+                return "\n".join(texts)
+
+    prompt_feedback = payload.get("promptFeedback", {})
+    if isinstance(prompt_feedback, dict):
+        block_reason = str(prompt_feedback.get("blockReason", "")).strip()
+        if block_reason:
+            raise RuntimeError(f"Gemini response was blocked: {block_reason}.")
+
+    raise RuntimeError("Gemini response did not include any text content.")
 
 if not LLM_PROVIDER:
     for provider_name in ("github", "gemini", "huggingface"):
@@ -215,15 +403,7 @@ if LLM_PROVIDER == "github" and not GITHUB_TOKEN and GEMINI_FALLBACK_ENABLED and
 # ─────────────────────────────────────────────
 # 1. Load inventory data
 # ─────────────────────────────────────────────
-SYSTEM_PROMPT = (
-    "You are Turbobujias AI Assistant, a specialist in spark plugs, glow plugs, diesel parts, "
-    "SKU/UPC matching, and vehicle compatibility for the Venezuelan market. "
-    "Use the catalog context as the primary source of truth. "
-    "Before answering, silently self-check for contradictions, missing fitment details, and invented part numbers. "
-    "If the catalog is insufficient or the application is ambiguous, say so clearly and ask for the minimum follow-up details needed, "
-    "such as brand, model, engine, fuel type, or year. "
-    "Prefer concise, practical answers with exact SKU references when available, short comparisons when useful, and a brief note about uncertainty when needed."
-)
+SYSTEM_PROMPT = load_system_prompt(SYSTEM_PROMPT_PATH)
 
 INVENTORY_PATH = APP_DIR / "inventory.json"
 
@@ -403,13 +583,14 @@ def find_exact_inventory_item(query: str) -> dict[str, Any] | None:
     return None
 
 
-def build_exact_lookup_answer(item: dict[str, Any]) -> str:
+def build_exact_lookup_answer(item: dict[str, Any], query: str) -> str:
     sku = str(item.get("sku", "")).strip()
     upc = str(item.get("upc", "")).strip()
     brand = str(item.get("brand", "")).strip()
     model = str(item.get("model", "")).strip()
     raw_type = str(item.get("type", "")).strip()
-    part_type = "Calentador" if raw_type == "diesel_glow_plug" else "Bujía"
+    part_type_es = "Calentador" if raw_type == "diesel_glow_plug" else "Bujía"
+    part_type_en = "Glow plug" if raw_type == "diesel_glow_plug" else "Spark plug"
     thread = str(item.get("thread", "")).strip()
     gap_value = item.get("gap_mm", "")
     gap = f"{gap_value} mm" if gap_value != "" else "N/A"
@@ -425,13 +606,42 @@ def build_exact_lookup_answer(item: dict[str, Any]) -> str:
             if str(application).strip()
         ]
 
+    language = detect_response_language(query)
+
+    if language == "en":
+        answer_lines = [
+            "**Exact match confirmed**",
+            "",
+            f"The code **{sku}** matches:",
+            "",
+            f"- **Brand:** {brand}",
+            f"- **Model:** {model}",
+            f"- **UPC:** {upc or 'N/A'}",
+            f"- **Type:** {part_type_en or 'N/A'}",
+            f"- **Thread:** {thread or 'N/A'}",
+            f"- **Gap:** {gap or 'N/A'}",
+            f"- **Electrode:** {electrode or 'N/A'}",
+            f"- **Price:** {price or 'N/A'}",
+        ]
+
+        if application_lines:
+            answer_lines.extend(["- **Applications:**", *application_lines])
+
+        answer_lines.append("")
+        answer_lines.append(
+            "If you'd like, I can also verify fitment by make, model, engine, fuel type, and year."
+        )
+        return "\n".join(answer_lines)
+
     answer_lines = [
-        f"El producto que corresponde a **{sku}** es:",
+        "**Coincidencia exacta confirmada**",
+        "",
+        f"El código **{sku}** corresponde a:",
         "",
         f"- **Marca:** {brand}",
         f"- **Modelo:** {model}",
         f"- **UPC:** {upc or 'N/A'}",
-        f"- **Tipo:** {part_type or 'N/A'}",
+        f"- **Tipo:** {part_type_es or 'N/A'}",
         f"- **Rosca:** {thread or 'N/A'}",
         f"- **Separación:** {gap or 'N/A'}",
         f"- **Electrodo:** {electrode or 'N/A'}",
@@ -461,7 +671,7 @@ def try_exact_lookup_answer(query: str, docs: list[Document]) -> tuple[str, list
     if not sku:
         return None
 
-    answer = build_exact_lookup_answer(exact_item)
+    answer = build_exact_lookup_answer(exact_item, query)
     sources = [sku]
     return answer, sources
 
@@ -531,7 +741,7 @@ def _call_github_models(messages: list[dict]) -> str:
         is_last_attempt = attempt == max_attempts - 1
         try:
             response = github_client.chat.completions.create(  # type: ignore[union-attr]
-                messages=messages,
+                messages=cast(Any, messages),
                 temperature=0.3,
                 top_p=1.0,
                 max_tokens=800,
@@ -546,13 +756,21 @@ def _call_github_models(messages: list[dict]) -> str:
     raise RuntimeError("_call_github_models: exhausted all retry attempts without a result or exception")
 
 
-def answer_with_github_models(
+def build_chat_user_message(query: str, docs: list[Document]) -> str:
+    context = "\n\n".join(doc.page_content for doc in docs)
+    return (
+        "Structured catalog context (primary source of truth — do not override it with assumptions):\n"
+        f"{context}\n\n"
+        f"Customer message:\n{query}"
+    )
+
+
+def build_github_messages(
     query: str,
     docs: list[Document],
     history: list[tuple[str, str]] | None = None,
 ) -> list[dict[str, str]]:
-    context = "\n\n".join(doc.page_content for doc in docs)
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     for previous_user, previous_assistant in (history or [])[-4:]:
         if previous_user:
@@ -563,13 +781,18 @@ def answer_with_github_models(
     messages.append(
         {
             "role": "user",
-            "content": (
-                f"Catalog context:\n{context}\n\n"
-                f"Customer question: {query}\n\n"
-                "Respond in the same language as the customer when possible."
-            ),
+            "content": build_chat_user_message(query, docs),
         }
     )
+    return messages
+
+
+def answer_with_github_models(
+    query: str,
+    docs: list[Document],
+    history: list[tuple[str, str]] | None = None,
+) -> tuple[str, list[str]]:
+    messages = build_github_messages(query, docs, history)
 
     answer = _call_github_models(messages)
     sources = collect_source_skus(query, answer, docs)
@@ -625,17 +848,12 @@ def answer_with_gemini(
         if previous_assistant:
             contents.append({"role": "model", "parts": [{"text": previous_assistant}]})
 
-    context = "\n\n".join(doc.page_content for doc in docs)
     contents.append(
         {
             "role": "user",
             "parts": [
                 {
-                    "text": (
-                        f"Catalog context:\n{context}\n\n"
-                        f"Customer question: {query}\n\n"
-                        "Respond in the same language as the customer when possible."
-                    )
+                    "text": build_chat_user_message(query, docs)
                 }
             ],
         }
@@ -805,10 +1023,15 @@ def chat_endpoint(payload: ChatRequest) -> ChatResponse:
         payload.message,
         history=[turn.model_dump() for turn in payload.history],
     )
+    raw_sources = result.get("sources", [])
+    sources = raw_sources if isinstance(raw_sources, list) else []
+    raw_history = result.get("history", [])
+    normalized_history = raw_history if isinstance(raw_history, list) else []
+
     return ChatResponse(
         reply=str(result.get("reply", "")),
-        sources=list(result.get("sources", [])),
-        history=[ChatTurn(**item) for item in result.get("history", []) if isinstance(item, dict)],
+        sources=[str(item) for item in sources],
+        history=[ChatTurn(**item) for item in normalized_history if isinstance(item, dict)],
     )
 
 

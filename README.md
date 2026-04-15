@@ -187,6 +187,37 @@ npm install
 npm run dev            # development server on port 3000
 ```
 
+### Unified startup from the repository root
+
+If you want one command to launch the canonical stack from the repo root, use the root scripts below:
+
+```bash
+npm run dev:all
+```
+
+That starts:
+
+- `backend/` on port `3001`
+- `turbobujias-web/` on port `3000`
+- the frontend chatbot proxy pointing to the deployed Turbobujias AI Space
+
+Useful variants:
+
+```bash
+npm run dev:all:remote-chatbot
+npm run dev:all:local-chatbot
+npm run dev:backend
+npm run dev:frontend
+npm run dev:chatbot
+npm run dev:help
+```
+
+Notes:
+
+- `dev:all` and `dev:all:remote-chatbot` are the fastest way to run the project locally because they reuse the deployed chatbot.
+- `dev:all:local-chatbot` and `dev:chatbot` expect a ready virtual environment in `turbobujias-ai/.venv313` or `turbobujias-ai/.venv`.
+- The unified launcher sets the frontend to `3000`, the backend to `3001`, and the local chatbot to `7860`.
+
 Minimal `.env.local` for local development:
 
 ```bash
@@ -218,8 +249,6 @@ it asks you for the values at runtime and keeps them only in memory.
 - Do **not** add hardcoded URLs pointing to internal or private services.
 
 ---
-
-
 
 Powered by [Hugging Face Spaces](https://huggingface.co/spaces) using:
 
