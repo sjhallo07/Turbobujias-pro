@@ -2,8 +2,7 @@
     "chat.tools.terminal.backgroundNotifications": true,
     "workbench.browser.enableChatTools": true,
     "chat.mcp.serverSampling": {
-        no-loc:
-        - 
+
         "Turbobujias-pro/.vscode/mcp.json: io.github.github/github-mcp-server": {
             "allowedModels": [
                 "copilot/auto",

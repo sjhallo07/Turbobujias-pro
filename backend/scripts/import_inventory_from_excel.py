@@ -10,6 +10,7 @@ from openpyxl import load_workbook
 ROOT = Path(__file__).resolve().parents[2]
 WORKBOOK_PATH = ROOT / "backend" / "data" / "Fichas_tecnicas-2026_04_11-23_57.xlsx"
 OUTPUT_PATH = ROOT / "backend" / "data" / "inventory.json"
+CHATBOT_OUTPUT_PATH = ROOT / "turbobujias-ai" / "inventory.json"
 
 KNOWN_BRANDS = {
     "ngk": "NGK",
@@ -389,13 +390,20 @@ def load_rows() -> list[dict[str, Any]]:
     return records
 
 
+def write_inventory_payload(records: list[dict[str, Any]], *paths: Path) -> None:
+    payload = json.dumps({"items": records}, indent=2, ensure_ascii=False) + "\n"
+    for output_path in paths:
+        output_path.write_text(payload, encoding="utf-8")
+
+
 
 def main() -> None:
     records = load_rows()
-    OUTPUT_PATH.write_text(json.dumps({"items": records}, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+    write_inventory_payload(records, OUTPUT_PATH, CHATBOT_OUTPUT_PATH)
     spark_count = sum(1 for item in records if item["type"] == "spark_plug")
     glow_count = sum(1 for item in records if item["type"] == "diesel_glow_plug")
     print(f"Wrote {len(records)} items to {OUTPUT_PATH}")
+    print(f"Synced {len(records)} items to {CHATBOT_OUTPUT_PATH}")
     print(f"Spark plugs: {spark_count}")
     print(f"Glow plugs: {glow_count}")
 
