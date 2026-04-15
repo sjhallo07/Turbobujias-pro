@@ -7,6 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
+    "sync:inventory": "node scripts/sync-inventory.mjs",
+    "check:inventory": "node scripts/sync-inventory.mjs --check",
+    "import:inventory": "python backend/scripts/import_inventory_from_excel.py",
     "dev:backend": "npm --prefix backend run dev",
     "start:backend": "npm --prefix backend run start",
     "dev:frontend": "npm --prefix turbobujias-web run dev",
@@ -19,7 +22,7 @@
     "dev:help": "node scripts/dev-stack.mjs --help"
   },
   "dependencies": {
-    "@gradio/client": "^2.4.1 ",
+    "@gradio/client": "^2.4.1",
     "axios": "^1.6.8",
     "html5-qrcode": "^2.3.8",
     "next": "15.5.15",

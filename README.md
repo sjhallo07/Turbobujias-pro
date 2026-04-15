@@ -144,6 +144,31 @@ project needs broader barcode coverage beyond the catalog stored in `inventory.j
 
 ---
 
+## 📚 Inventory source of truth
+
+The project still uses JSON files as its catalog store, but they should no longer drift independently.
+
+- `backend/data/inventory.json` is the **canonical source of truth**
+- `turbobujias-ai/inventory.json` is a **derived synchronized copy** used by the chatbot runtime and Hugging Face deployment bundle
+
+Run these commands from the repository root:
+
+```bash
+npm run sync:inventory
+npm run check:inventory
+npm run import:inventory
+```
+
+What they do:
+
+- `sync:inventory` copies the canonical backend inventory into the chatbot inventory and verifies SKU/count parity
+- `check:inventory` verifies parity without modifying files
+- `import:inventory` rebuilds the backend inventory from the Excel workbook and syncs the chatbot copy in the same flow
+
+If you update the catalog, do **not** edit `turbobujias-ai/inventory.json` manually unless you intentionally want that change to be overwritten by the next sync/import.
+
+---
+
 ## 🔒 Operational best practices
 
 ### Secrets and tokens
