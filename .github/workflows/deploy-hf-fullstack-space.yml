@@ -25,14 +25,22 @@ jobs:
   deploy:
     name: Publish Docker Space bundle
     runs-on: ubuntu-latest
-    environment:
-      name: huggingface-space
-      url: ${{ vars.HF_SPACE_PUBLIC_URL }}
-    if: ${{ vars.HF_SPACE_REPO_ID != '' && vars.HF_SPACE_PUBLIC_URL != '' && secrets.HF_TOKEN != '' }}
+    environment: huggingface-space
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Validate Hugging Face environment configuration
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_REPO_ID: ${{ vars.HF_SPACE_REPO_ID }}
+          HF_SPACE_PUBLIC_URL: ${{ vars.HF_SPACE_PUBLIC_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$HF_TOKEN" || { echo "::error::Missing HF_TOKEN secret in the huggingface-space environment or repository."; exit 1; }
+          test -n "$HF_SPACE_REPO_ID" || { echo "::error::Missing HF_SPACE_REPO_ID variable in the huggingface-space environment."; exit 1; }
+          test -n "$HF_SPACE_PUBLIC_URL" || { echo "::error::Missing HF_SPACE_PUBLIC_URL variable in the huggingface-space environment."; exit 1; }
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
