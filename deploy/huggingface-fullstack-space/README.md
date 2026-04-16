@@ -6,7 +6,7 @@ colorTo: indigo
 sdk: docker
 app_port: 7860
 pinned: false
-short_description: Full-stack Turbobujias storefront, backend API, and chatbot on one public URL.
+short_description: Turbobujias full stack on one public URL.
 ---
 
 $$
