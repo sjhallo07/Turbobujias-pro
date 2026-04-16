@@ -78,4 +78,5 @@ jobs:
       - name: Show deployed public URL
         env:
           HF_SPACE_PUBLIC_URL: ${{ vars.HF_SPACE_PUBLIC_URL }}
-        run: echo "Expected public URL: $HF_SPACE_PUBLIC_URL"
+        run: |
+          echo "Expected public URL: $HF_SPACE_PUBLIC_URL"
