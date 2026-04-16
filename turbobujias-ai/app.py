@@ -936,13 +936,28 @@ def serialize_history(history: list[tuple[str, str]]) -> list[dict[str, str]]:
     """Convert Gradio chat history tuples into a JSON-safe structure."""
     serialized = []
     for user_message, assistant_message in history:
-      serialized.append(
-          {
-              "user": str(user_message),
-              "assistant": str(assistant_message),
-          }
-      )
+        serialized.append(
+            {
+                "user": str(user_message),
+                "assistant": str(assistant_message),
+            }
+        )
     return serialized
+
+
+def build_gradio_messages(history: list[tuple[str, str]]) -> list[dict[str, str]]:
+    """Convert tuple history into Gradio's messages format.
+
+    Gradio 6 Chatbot defaults to `type="messages"`, where each entry must be a
+    dictionary containing `role` and `content` keys.
+    """
+    messages: list[dict[str, str]] = []
+    for user_message, assistant_message in history:
+        if str(user_message).strip():
+            messages.append({"role": "user", "content": str(user_message)})
+        if str(assistant_message).strip():
+            messages.append({"role": "assistant", "content": str(assistant_message)})
+    return messages
 
 
 def normalize_history(history: list[dict[str, str]] | None) -> list[tuple[str, str]]:
@@ -1044,10 +1059,10 @@ def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     )
 
 
-def answer_text(query: str, history: list) -> tuple[str, list, list]:
+def answer_text(query: str, history: list[tuple[str, str]]) -> tuple[str, list[dict[str, str]], list[tuple[str, str]]]:
     """Process a text query and return (cleared_input, updated_chatbot, updated_state)."""
     if not query.strip():
-        return "", history, history
+        return "", build_gradio_messages(history), history
     try:
         answer, sources = answer_query(query, history)
     except Exception as exc:
@@ -1056,16 +1071,16 @@ def answer_text(query: str, history: list) -> tuple[str, list, list]:
     if sources:
         answer += f"\n\n*Sources: {', '.join(sources)}*"
     updated_history = history + [(query, answer)]
-    return "", updated_history, updated_history
+    return "", build_gradio_messages(updated_history), updated_history
 
 
-def answer_voice(audio_path: str | None, history: list) -> tuple[list, list]:
+def answer_voice(audio_path: str | None, history: list[tuple[str, str]]) -> tuple[list[dict[str, str]], list[tuple[str, str]]]:
     """Transcribe voice input with Whisper then run QA.
 
     Returns (updated_chatbot, updated_state).
     """
     if audio_path is None:
-        return history, history
+        return build_gradio_messages(history), history
     try:
         transcription = whisper_model.transcribe(audio_path)["text"]
     except Exception as exc:
@@ -1080,10 +1095,10 @@ def answer_voice(audio_path: str | None, history: list) -> tuple[list, list]:
             "[voice input]",
             error_message,
         )]
-        return updated_history, updated_history
+        return build_gradio_messages(updated_history), updated_history
 
-    _, updated_history, updated_state = answer_text(transcription, history)
-    return updated_history, updated_state
+    _, updated_messages, updated_state = answer_text(transcription, history)
+    return updated_messages, updated_state
 
 
 # ─────────────────────────────────────────────
@@ -1100,7 +1115,7 @@ with gr.Blocks(title="Turbobujias AI Assistant", theme=gr.themes.Soft()) as demo
         """
     )
 
-    chatbot = gr.Chatbot(label="Chat", height=450)
+    chatbot = gr.Chatbot(label="Chat", height=450, type="messages")
     state = gr.State([])
 
     with gr.Row():

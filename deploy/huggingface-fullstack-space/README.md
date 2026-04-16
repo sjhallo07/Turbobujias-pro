@@ -9,6 +9,7 @@ pinned: false
 short_description: Full-stack Turbobujias storefront, backend API, and chatbot on one public URL.
 ---
 
+$$
 ## Turbobujias Full Stack Docker Space
 
 This Space runs the full Turbobujias stack behind a single public URL:
@@ -17,6 +18,8 @@ This Space runs the full Turbobujias stack behind a single public URL:
 - Express backend API
 - Python + Gradio chatbot
 - JSON catalog data bundled into the image
+
+$$
 
 ## Public routes
 

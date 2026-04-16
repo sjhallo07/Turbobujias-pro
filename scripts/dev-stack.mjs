@@ -107,11 +107,16 @@ function prefixStream(stream, prefix, target) {
 }
 
 function spawnService(name, command, commandArgs, options) {
+    const useShell =
+        process.platform === 'win32' &&
+        typeof command === 'string' &&
+        command.toLowerCase().endsWith('.cmd');
+
     const child = spawn(command, commandArgs, {
         cwd: options.cwd,
         env: options.env,
-        stdio: ['inherit', 'pipe', 'pipe'],
-        shell: false,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        shell: useShell,
     });
 
     prefixStream(child.stdout, name, process.stdout);
