@@ -60,6 +60,8 @@ vector_db/
 # ──────────────────── Jupyter ────────────────────
 .ipynb_checkpoints/
 *.ipynb
+!deploy/huggingface-fullstack-space/deploy_hf_fullstack_space.ipynb
+!deploy/huggingface-fullstack-space/run_fullstack_local_and_mcp.ipynb
 
 # ──────────────────── OS / editor ────────────────────
 .DS_Store

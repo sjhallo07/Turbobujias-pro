@@ -936,13 +936,28 @@ def serialize_history(history: list[tuple[str, str]]) -> list[dict[str, str]]:
     """Convert Gradio chat history tuples into a JSON-safe structure."""
     serialized = []
     for user_message, assistant_message in history:
-      serialized.append(
-          {
-              "user": str(user_message),
-              "assistant": str(assistant_message),
-          }
-      )
+        serialized.append(
+            {
+                "user": str(user_message),
+                "assistant": str(assistant_message),
+            }
+        )
     return serialized
+
+
+def build_gradio_messages(history: list[tuple[str, str]]) -> list[dict[str, str]]:
+    """Convert tuple history into Gradio's messages format.
+
+    Gradio 6 Chatbot defaults to `type="messages"`, where each entry must be a
+    dictionary containing `role` and `content` keys.
+    """
+    messages: list[dict[str, str]] = []
+    for user_message, assistant_message in history:
+        if str(user_message).strip():
+            messages.append({"role": "user", "content": str(user_message)})
+        if str(assistant_message).strip():
+            messages.append({"role": "assistant", "content": str(assistant_message)})
+    return messages
 
 
 def normalize_history(history: list[dict[str, str]] | None) -> list[tuple[str, str]]:
@@ -1044,10 +1059,10 @@ def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     )
 
 
-def answer_text(query: str, history: list) -> tuple[str, list, list]:
+def answer_text(query: str, history: list[tuple[str, str]]) -> tuple[str, list[dict[str, str]], list[tuple[str, str]]]:
     """Process a text query and return (cleared_input, updated_chatbot, updated_state)."""
     if not query.strip():
-        return "", history, history
+        return "", build_gradio_messages(history), history
     try:
         answer, sources = answer_query(query, history)
     except Exception as exc:
@@ -1056,16 +1071,16 @@ def answer_text(query: str, history: list) -> tuple[str, list, list]:
     if sources:
         answer += f"\n\n*Sources: {', '.join(sources)}*"
     updated_history = history + [(query, answer)]
-    return "", updated_history, updated_history
+    return "", build_gradio_messages(updated_history), updated_history
 
 
-def answer_voice(audio_path: str | None, history: list) -> tuple[list, list]:
+def answer_voice(audio_path: str | None, history: list[tuple[str, str]]) -> tuple[list[dict[str, str]], list[tuple[str, str]]]:
     """Transcribe voice input with Whisper then run QA.
 
     Returns (updated_chatbot, updated_state).
     """
     if audio_path is None:
-        return history, history
+        return build_gradio_messages(history), history
     try:
         transcription = whisper_model.transcribe(audio_path)["text"]
     except Exception as exc:
@@ -1080,16 +1095,16 @@ def answer_voice(audio_path: str | None, history: list) -> tuple[list, list]:
             "[voice input]",
             error_message,
         )]
-        return updated_history, updated_history
+        return build_gradio_messages(updated_history), updated_history
 
-    _, updated_history, updated_state = answer_text(transcription, history)
-    return updated_history, updated_state
+    _, updated_messages, updated_state = answer_text(transcription, history)
+    return updated_messages, updated_state
 
 
 # ─────────────────────────────────────────────
 # 6. Gradio UI
 # ─────────────────────────────────────────────
-with gr.Blocks(title="Turbobujias AI Assistant", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title="Turbobujias AI Assistant") as demo:
     gr.Markdown(
         """
         # 🔧 Turbobujias AI Assistant
@@ -1147,11 +1162,45 @@ app = gr.mount_gradio_app(
     path=normalize_mount_path(os.environ.get("GRADIO_MOUNT_PATH", "/")),
 )
 
-if __name__ == "__main__":
+
+def launch_demo_with_optional_share() -> None:
+    server_name = os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1")
+    server_port = int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", "7860")))
+    share_enabled = env_bool("GRADIO_SHARE", False)
+
+    launch_kwargs: dict[str, Any] = {
+        "server_name": server_name,
+        "server_port": server_port,
+        "theme": gr.themes.Soft(),
+        "show_error": True,
+    }
+
+    if share_enabled:
+        launch_kwargs["share"] = True
+        share_server_address = os.environ.get("GRADIO_SHARE_SERVER_ADDRESS", "").strip()
+        share_server_protocol = os.environ.get("GRADIO_SHARE_SERVER_PROTOCOL", "").strip()
+        if share_server_address:
+            launch_kwargs["share_server_address"] = share_server_address
+        if share_server_protocol:
+            launch_kwargs["share_server_protocol"] = share_server_protocol
+
     demo.queue(default_concurrency_limit=2)
-    uvicorn.run(
-        app,
-        host=os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1"),
-        port=int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", "7860"))),
-    )
+    _app, local_url, share_url = demo.launch(**launch_kwargs)
+
+    _log.info("Gradio local URL: %s", local_url)
+    if share_url:
+        _log.info("Gradio public share URL: %s", share_url)
+    else:
+        _log.info("Gradio share is disabled; no public URL was created.")
+
+if __name__ == "__main__":
+    if env_bool("GRADIO_SHARE", False):
+        launch_demo_with_optional_share()
+    else:
+        demo.queue(default_concurrency_limit=2)
+        uvicorn.run(
+            app,
+            host=os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1"),
+            port=int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", "7860"))),
+        )
 

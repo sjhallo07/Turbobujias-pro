@@ -9,6 +9,7 @@ pinned: false
 short_description: Full-stack Turbobujias storefront, backend API, and chatbot on one public URL.
 ---
 
+$$
 ## Turbobujias Full Stack Docker Space
 
 This Space runs the full Turbobujias stack behind a single public URL:
@@ -18,7 +19,13 @@ This Space runs the full Turbobujias stack behind a single public URL:
 - Python + Gradio chatbot
 - JSON catalog data bundled into the image
 
+$$
+
 ## Public routes
+
+Expected public base URL for the repository-managed Space:
+
+- `https://sjhallo07-turbobujias-fullstack.hf.space`
 
 - `/` — storefront
 - `/api/*` — backend API
@@ -41,3 +48,17 @@ Set these in the Hugging Face Space settings as needed:
 ## Build notes
 
 The Docker image builds the storefront, installs the backend and chatbot dependencies, and serves everything through Nginx on port `7860`.
+
+## Deploy from this repository with GitHub Actions
+
+This repository can publish the Docker Space bundle directly to Hugging Face using the workflow `deploy-hf-fullstack-space.yml`.
+
+Required GitHub Actions secrets:
+
+- `HF_TOKEN` — Hugging Face write token with access to `sjhallo07/turbobujias-fullstack`
+
+The workflow prepares `dist/hf-fullstack-space/` and force-pushes that generated bundle to the exact Docker Space repository `sjhallo07/turbobujias-fullstack`.
+
+After a successful workflow run, the expected public URL is:
+
+- `https://sjhallo07-turbobujias-fullstack.hf.space`

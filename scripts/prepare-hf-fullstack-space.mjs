@@ -12,6 +12,7 @@ const includePaths = [
   'backend',
   'turbobujias-web',
   'turbobujias-ai',
+  path.join('deploy', 'huggingface-fullstack-space', '.dockerignore'),
   path.join('deploy', 'huggingface-fullstack-space', 'Dockerfile'),
   path.join('deploy', 'huggingface-fullstack-space', 'README.md'),
   path.join('deploy', 'huggingface-fullstack-space', 'deploy_hf_fullstack_space.ipynb'),
