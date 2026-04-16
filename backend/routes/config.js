@@ -46,6 +46,32 @@ function resolveChatbotPublicUrl(req) {
     return `${resolveBackendPublicUrl(req)}${normalizePath(configured, '/chatbot')}`;
 }
 
+function resolveChatbotApiBaseUrl(req) {
+    const configuredApi = String(process.env.CHATBOT_API_BASE_URL || '').trim();
+    if (configuredApi) {
+        if (/^https?:\/\//i.test(configuredApi)) {
+            return normalizeBaseUrl(configuredApi);
+        }
+
+        return `${resolveBackendPublicUrl(req)}${normalizePath(configuredApi, '/')}`;
+    }
+
+    const configuredUi = String(process.env.CHATBOT_PUBLIC_URL || '').trim();
+    if (!configuredUi) {
+        return 'https://sjhallo07-turbobujias-ai.hf.space';
+    }
+
+    if (/^https?:\/\//i.test(configuredUi)) {
+        const normalizedUi = normalizeBaseUrl(configuredUi);
+        if (normalizedUi.endsWith('/chatbot')) {
+            return normalizedUi.slice(0, -'/chatbot'.length) || normalizedUi;
+        }
+        return normalizedUi;
+    }
+
+    return resolveBackendPublicUrl(req);
+}
+
 function buildFrontendRedirect(req, pathname) {
     const frontendBaseUrl = resolveFrontendPublicUrl(req);
     if (!frontendBaseUrl) {
@@ -59,6 +85,7 @@ router.get('/public', (req, res) => {
     const backendPublicUrl = resolveBackendPublicUrl(req);
     const frontendPublicUrl = resolveFrontendPublicUrl(req);
     const chatbotPublicUrl = resolveChatbotPublicUrl(req);
+    const chatbotApiBaseUrl = resolveChatbotApiBaseUrl(req);
 
     res.json({
         backend: {
@@ -72,8 +99,8 @@ router.get('/public', (req, res) => {
         },
         chatbot: {
             publicUrl: chatbotPublicUrl,
-            requestUrl: `${chatbotPublicUrl}/chat`,
-            metadataUrl: `${chatbotPublicUrl}/openapi.json`,
+            requestUrl: `${chatbotApiBaseUrl}/chat`,
+            metadataUrl: `${chatbotApiBaseUrl}/openapi.json`,
         },
         links: {
             whatsappUrl: process.env.WHATSAPP_URL || 'https://api.whatsapp.com/send',
