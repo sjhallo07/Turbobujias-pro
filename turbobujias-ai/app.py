@@ -1104,7 +1104,7 @@ def answer_voice(audio_path: str | None, history: list[tuple[str, str]]) -> tupl
 # ─────────────────────────────────────────────
 # 6. Gradio UI
 # ─────────────────────────────────────────────
-with gr.Blocks(title="Turbobujias AI Assistant", theme=gr.themes.Soft()) as demo:
+with gr.Blocks(title="Turbobujias AI Assistant") as demo:
     gr.Markdown(
         """
         # 🔧 Turbobujias AI Assistant
@@ -1115,7 +1115,7 @@ with gr.Blocks(title="Turbobujias AI Assistant", theme=gr.themes.Soft()) as demo
         """
     )
 
-    chatbot = gr.Chatbot(label="Chat", height=450, type="messages")
+    chatbot = gr.Chatbot(label="Chat", height=450)
     state = gr.State([])
 
     with gr.Row():
@@ -1162,11 +1162,45 @@ app = gr.mount_gradio_app(
     path=normalize_mount_path(os.environ.get("GRADIO_MOUNT_PATH", "/")),
 )
 
-if __name__ == "__main__":
+
+def launch_demo_with_optional_share() -> None:
+    server_name = os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1")
+    server_port = int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", "7860")))
+    share_enabled = env_bool("GRADIO_SHARE", False)
+
+    launch_kwargs: dict[str, Any] = {
+        "server_name": server_name,
+        "server_port": server_port,
+        "theme": gr.themes.Soft(),
+        "show_error": True,
+    }
+
+    if share_enabled:
+        launch_kwargs["share"] = True
+        share_server_address = os.environ.get("GRADIO_SHARE_SERVER_ADDRESS", "").strip()
+        share_server_protocol = os.environ.get("GRADIO_SHARE_SERVER_PROTOCOL", "").strip()
+        if share_server_address:
+            launch_kwargs["share_server_address"] = share_server_address
+        if share_server_protocol:
+            launch_kwargs["share_server_protocol"] = share_server_protocol
+
     demo.queue(default_concurrency_limit=2)
-    uvicorn.run(
-        app,
-        host=os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1"),
-        port=int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", "7860"))),
-    )
+    _app, local_url, share_url = demo.launch(**launch_kwargs)
+
+    _log.info("Gradio local URL: %s", local_url)
+    if share_url:
+        _log.info("Gradio public share URL: %s", share_url)
+    else:
+        _log.info("Gradio share is disabled; no public URL was created.")
+
+if __name__ == "__main__":
+    if env_bool("GRADIO_SHARE", False):
+        launch_demo_with_optional_share()
+    else:
+        demo.queue(default_concurrency_limit=2)
+        uvicorn.run(
+            app,
+            host=os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1"),
+            port=int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", "7860"))),
+        )
 
