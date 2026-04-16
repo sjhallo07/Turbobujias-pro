@@ -17,14 +17,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: deploy-hf-fullstack-space
+  cancel-in-progress: true
+
 jobs:
   deploy:
     name: Publish Docker Space bundle
     runs-on: ubuntu-latest
-    if: ${{ secrets.HF_TOKEN != '' }}
-    env:
-      HF_SPACE_REPO_ID: sjhallo07/turbobujias-fullstack
-      HF_SPACE_PUBLIC_URL: https://sjhallo07-turbobujias-fullstack.hf.space
+    environment:
+      name: huggingface-space
+      url: ${{ vars.HF_SPACE_PUBLIC_URL }}
+    if: ${{ vars.HF_SPACE_REPO_ID != '' && vars.HF_SPACE_PUBLIC_URL != '' && secrets.HF_TOKEN != '' }}
 
     steps:
       - name: Checkout code
@@ -41,8 +45,8 @@ jobs:
       - name: Publish bundle to Hugging Face Space
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          HF_SPACE_REPO_ID: ${{ env.HF_SPACE_REPO_ID }}
-          HF_SPACE_PUBLIC_URL: ${{ env.HF_SPACE_PUBLIC_URL }}
+          HF_SPACE_REPO_ID: ${{ vars.HF_SPACE_REPO_ID }}
+          HF_SPACE_PUBLIC_URL: ${{ vars.HF_SPACE_PUBLIC_URL }}
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
@@ -64,4 +68,6 @@ jobs:
           git push --force origin main
 
       - name: Show deployed public URL
+        env:
+          HF_SPACE_PUBLIC_URL: ${{ vars.HF_SPACE_PUBLIC_URL }}
         run: echo "Expected public URL: $HF_SPACE_PUBLIC_URL"

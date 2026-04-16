@@ -176,7 +176,7 @@ If you update the catalog, do **not** edit `turbobujias-ai/inventory.json` manua
 - **Never commit real tokens** to the repository. All example files use placeholder
   strings such as `your_github_token_here`.
 - Store production secrets as environment variables or CI/CD secrets (for example
-  Vercel environment variables, Hugging Face Space secrets, or GitHub Actions secrets).
+  GitHub Actions environment variables/secrets or Hugging Face Space secrets).
 - Rotate any token that was ever copied into a file, issue comment, or PR body.
 
 ### Backend startup
@@ -346,10 +346,10 @@ Use `.env.local` inside `turbobujias-web/` to switch between localhost, local ne
 
 ```bash
 NEXT_PUBLIC_API_URL=http://localhost:3001/api
-NEXT_PUBLIC_HF_SPACE_URL=https://sjhallo07-turbobujias-ai.hf.space
+NEXT_PUBLIC_HF_SPACE_URL=https://sjhallo07-turbobujias-fullstack.hf.space/chatbot
 NEXT_PUBLIC_WHATSAPP_URL=https://api.whatsapp.com/send
-NEXT_PUBLIC_INSTAGRAM_URL=https://www.instagram.com/turbobujiaspro/
-NEXT_PUBLIC_MERCADOLIBRE_URL=https://www.mercadolibre.com.ve/
+NEXT_PUBLIC_INSTAGRAM_URL=https://www.instagram.com/turbobujias/
+NEXT_PUBLIC_MERCADOLIBRE_URL=https://www.mercadolibre.com.ve/pagina/turbobujias3646#from=share_eshop
 NEXT_PUBLIC_PAYPAL_URL=https://www.paypal.com/
 NEXT_PUBLIC_BINANCE_PAY_URL=https://pay.binance.com/
 ```
@@ -364,16 +364,24 @@ NEXT_PUBLIC_BINANCE_PAY_URL=https://pay.binance.com/
 
 | Service | Platform |
 | --- | --- |
-| Backend API | Render / Railway (via GitHub Actions) |
-| AI Chatbot | Hugging Face Spaces |
-| Frontend | Vercel |
+| Full stack storefront + backend API + chatbot | Hugging Face Docker Space |
+| CI/CD variables and secrets | GitHub Actions environment `huggingface-space` |
 
-GitHub Actions workflow (`.github/workflows/deploy-backend.yml`) auto-deploys
-the backend on every push to `main`.
+GitHub Actions workflow (`.github/workflows/deploy-hf-fullstack-space.yml`) publishes
+the generated Docker Space bundle on pushes to `main` using these GitHub environment variables:
+
+- `HF_SPACE_REPO_ID`
+- `HF_SPACE_PUBLIC_URL`
+
+and the secret:
+
+- `HF_TOKEN`
 
 For mobile use, the storefront is a responsive web app that works in Android and iOS browsers once the backend URL is reachable from the device.
 
-The chatbot can stay on Hugging Face Spaces and be opened from the storefront in a separate browser tab/window.
+Current production URL:
+
+- `https://sjhallo07-turbobujias-fullstack.hf.space`
 
 ---
 
