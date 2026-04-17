@@ -93,6 +93,9 @@ htmlcov/
 *.coveragexml
 TestResult.xml
 
+# Local auth/session runtime data
+backend/data/users.json
+
 # Allow tracked frontend source modules under turbobujias-web/lib
 !/turbobujias-web/lib/
 !/turbobujias-web/lib/**

@@ -1,154 +1,48 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { useDispatch, useSelector } from "react-redux";
+import { useDispatch } from "react-redux";
 import {
-  detectAdminFromEmail,
-  hydrateAuthState,
-  loginSuccess,
-  registerSuccess,
-  selectAuthState,
-  selectAuthUsers,
+  detectAdminIdentity,
+  normalizeUsername,
+  setCurrentUser,
 } from "../lib/authSlice";
 
-const AUTH_STORAGE_KEY = "tb-auth-state";
-const PASSWORD_HASH_ITERATIONS = 600000;
+const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 
-function sanitizePersistedPayload(payload) {
-  if (!payload || typeof payload !== "object") {
-    return { currentUser: null, users: [] };
+async function postJson(pathname, payload) {
+  const response = await fetch(`${API_URL}${pathname}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify(payload || {}),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data.error || "La solicitud de autenticación falló.");
   }
 
-  return {
-    currentUser: payload.currentUser ?? null,
-    users: Array.isArray(payload.users) ? payload.users : [],
-  };
+  return data;
 }
 
-async function hashPassword(password) {
-  const saltBuffer = window.crypto.getRandomValues(new Uint8Array(16));
-  const normalizedPassword = String(password || "");
-  const keyMaterial = await window.crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(normalizedPassword),
-    "PBKDF2",
-    false,
-    ["deriveBits"]
-  );
-  const buffer = await window.crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      hash: "SHA-256",
-      salt: saltBuffer,
-      iterations: PASSWORD_HASH_ITERATIONS,
-    },
-    keyMaterial,
-    256
-  );
-
-  return {
-    passwordHash: Array.from(new Uint8Array(buffer), (value) =>
-      value.toString(16).padStart(2, "0")
-    ).join(""),
-    passwordSalt: Array.from(saltBuffer, (value) => value.toString(16).padStart(2, "0")).join(""),
-  };
-}
-
-async function hashPasswordWithSalt(password, passwordSalt) {
-  const normalizedPassword = String(password || "");
-  const saltHex = String(passwordSalt || "");
-  const saltBuffer = Uint8Array.from(
-    saltHex.match(/.{1,2}/g)?.map((chunk) => parseInt(chunk, 16)) || []
-  );
-  const keyMaterial = await window.crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(normalizedPassword),
-    "PBKDF2",
-      false,
-      ["deriveBits"]
-  );
-  const buffer = await window.crypto.subtle.deriveBits(
-    {
-      name: "PBKDF2",
-      hash: "SHA-256",
-      salt: saltBuffer,
-      iterations: PASSWORD_HASH_ITERATIONS,
-    },
-    keyMaterial,
-    256
-  );
-
-  return Array.from(new Uint8Array(buffer), (value) => value.toString(16).padStart(2, "0")).join("");
-}
-
-function createStoredUser(values, passwordHash, passwordSalt) {
-  const email = String(values.email || "").trim().toLowerCase();
-
-  return {
-    id: `user-${email}-${Date.now()}`,
-    name: String(values.name || "Cliente Turbobujias").trim(),
-    email,
-    phone: String(values.phone || "").trim(),
-    business: String(values.business || "").trim(),
-    passwordHash,
-    passwordSalt,
-    isAdmin: detectAdminFromEmail(email),
-    createdAt: new Date().toISOString(),
-  };
-}
-
-export default function AuthModal({ isOpen, mode, onClose, onModeChange }) {
+export default function AuthModal({ authConfig, isOpen, mode, onClose, onModeChange }) {
   const dispatch = useDispatch();
-  const authState = useSelector(selectAuthState);
-  const users = useSelector(selectAuthUsers);
-  const [hasLoadedStorage, setHasLoadedStorage] = useState(false);
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loginForm, setLoginForm] = useState({ email: "", password: "" });
+  const [loginForm, setLoginForm] = useState({ identifier: "", password: "" });
   const [registerForm, setRegisterForm] = useState({
     name: "",
+    username: "",
     email: "",
     phone: "",
     business: "",
     password: "",
     confirmPassword: "",
   });
-
-  useEffect(() => {
-    if (typeof window === "undefined" || hasLoadedStorage) {
-      return;
-    }
-
-    try {
-      const rawValue = window.localStorage.getItem(AUTH_STORAGE_KEY);
-      if (rawValue) {
-        dispatch(hydrateAuthState(sanitizePersistedPayload(JSON.parse(rawValue))));
-      } else {
-        dispatch(hydrateAuthState({ currentUser: null, users: [] }));
-      }
-    } catch (storageError) {
-      console.warn("No se pudo leer tb-auth-state desde localStorage.", storageError);
-      dispatch(hydrateAuthState({ currentUser: null, users: [] }));
-    } finally {
-      setHasLoadedStorage(true);
-    }
-  }, [dispatch, hasLoadedStorage]);
-
-  useEffect(() => {
-    if (typeof window === "undefined" || !authState.isHydrated || !hasLoadedStorage) {
-      return;
-    }
-
-    try {
-      window.localStorage.setItem(
-        AUTH_STORAGE_KEY,
-        JSON.stringify({ currentUser: authState.currentUser, users: authState.users })
-      );
-    } catch (storageError) {
-      console.warn("No se pudo guardar tb-auth-state en localStorage.", storageError);
-    }
-  }, [authState.currentUser, authState.isHydrated, authState.users, hasLoadedStorage]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -159,11 +53,27 @@ export default function AuthModal({ isOpen, mode, onClose, onModeChange }) {
   }, [isOpen]);
 
   const adminHint = useMemo(() => {
-    const email = mode === "register" ? registerForm.email : loginForm.email;
-    return detectAdminFromEmail(email)
-      ? "Se detectará como cuenta administradora."
+    const identity = mode === "register"
+      ? { email: registerForm.email, username: registerForm.username }
+      : { email: loginForm.identifier, username: loginForm.identifier };
+
+    return detectAdminIdentity(identity)
+      ? "Se detectará como superadmin."
       : "Se iniciará como cuenta cliente.";
-  }, [loginForm.email, mode, registerForm.email]);
+  }, [loginForm.identifier, mode, registerForm.email, registerForm.username]);
+
+  const googleEnabled = Boolean(authConfig?.google?.enabled);
+  const githubEnabled = Boolean(authConfig?.github?.enabled);
+
+  function startProviderFlow(provider) {
+    const providerUrl = authConfig?.[provider]?.authUrl;
+    if (!providerUrl) {
+      setError(`El acceso con ${provider} aún no está configurado en el servidor.`);
+      return;
+    }
+
+    window.location.assign(providerUrl);
+  }
 
   if (!isOpen) {
     return null;
@@ -177,8 +87,9 @@ export default function AuthModal({ isOpen, mode, onClose, onModeChange }) {
 
     try {
       const trimmedEmail = registerForm.email.trim().toLowerCase();
-      if (!registerForm.name.trim() || !trimmedEmail || !registerForm.password) {
-        throw new Error("Completa nombre, correo y contraseña para crear tu cuenta.");
+      const trimmedUsername = normalizeUsername(registerForm.username || trimmedEmail.split("@")[0]);
+      if (!registerForm.name.trim() || !trimmedUsername || !trimmedEmail || !registerForm.password) {
+        throw new Error("Completa nombre, usuario, correo y contraseña para crear tu cuenta.");
       }
       if (registerForm.password.length < 8) {
         throw new Error("La contraseña debe tener al menos 8 caracteres.");
@@ -186,24 +97,22 @@ export default function AuthModal({ isOpen, mode, onClose, onModeChange }) {
       if (registerForm.password !== registerForm.confirmPassword) {
         throw new Error("La confirmación de contraseña no coincide.");
       }
-      if (users.some((user) => user.email === trimmedEmail)) {
-        throw new Error("Ya existe una cuenta registrada con ese correo.");
-      }
 
-      const { passwordHash, passwordSalt } = await hashPassword(registerForm.password);
-      const storedUser = createStoredUser(
-        { ...registerForm, email: trimmedEmail },
-        passwordHash,
-        passwordSalt
-      );
-      dispatch(registerSuccess(storedUser));
+      const response = await postJson("/auth/register", {
+        ...registerForm,
+        username: trimmedUsername,
+        email: trimmedEmail,
+      });
+
+      dispatch(setCurrentUser(response.currentUser));
       setStatus(
-        storedUser.isAdmin
-          ? "Cuenta creada con permisos administradores."
+        response.currentUser?.isSuperAdmin
+          ? "Cuenta creada con permisos de superadmin."
           : "Cuenta creada correctamente."
       );
       setRegisterForm({
         name: "",
+        username: "",
         email: "",
         phone: "",
         business: "",
@@ -225,25 +134,19 @@ export default function AuthModal({ isOpen, mode, onClose, onModeChange }) {
     setStatus("");
 
     try {
-      const trimmedEmail = loginForm.email.trim().toLowerCase();
-      if (!trimmedEmail || !loginForm.password) {
-        throw new Error("Ingresa correo y contraseña.");
+      const trimmedIdentifier = loginForm.identifier.trim().toLowerCase();
+      if (!trimmedIdentifier || !loginForm.password) {
+        throw new Error("Ingresa usuario o correo y contraseña.");
       }
 
-      const matchedUser = users.find((user) => user.email === trimmedEmail);
+      const response = await postJson("/auth/login", {
+        identifier: trimmedIdentifier,
+        password: loginForm.password,
+      });
 
-      if (!matchedUser) {
-        throw new Error("No encontramos una cuenta con esas credenciales.");
-      }
-
-      const passwordHash = await hashPasswordWithSalt(loginForm.password, matchedUser.passwordSalt);
-      if (matchedUser.passwordHash !== passwordHash) {
-        throw new Error("No encontramos una cuenta con esas credenciales.");
-      }
-
-      dispatch(loginSuccess(matchedUser));
-      setStatus(matchedUser.isAdmin ? "Sesión administradora iniciada." : "Sesión iniciada.");
-      setLoginForm({ email: "", password: "" });
+      dispatch(setCurrentUser(response.currentUser));
+      setStatus(response.currentUser?.isAdmin ? "Sesión administradora iniciada." : "Sesión iniciada.");
+      setLoginForm({ identifier: "", password: "" });
       onClose();
     } catch (submitError) {
       setError(submitError instanceof Error ? submitError.message : "No se pudo iniciar sesión.");
@@ -266,7 +169,7 @@ export default function AuthModal({ isOpen, mode, onClose, onModeChange }) {
             <span className="tag">Acceso</span>
             <h2 id="auth-modal-title">{mode === "register" ? "Crear cuenta" : "Iniciar sesión"}</h2>
             <p className="muted">
-              Guarda tus datos para cotizaciones rápidas y detecta perfiles administradores por correo.
+              Email y contraseña funcionan hoy; Google y GitHub se activan desde el backend cuando las credenciales OAuth están listas.
             </p>
           </div>
           <button aria-label="Cerrar autenticación" className="icon-button" onClick={onClose} type="button">
@@ -291,6 +194,32 @@ export default function AuthModal({ isOpen, mode, onClose, onModeChange }) {
           </button>
         </div>
 
+        <div className="auth-provider-grid">
+          <button
+            className="button-secondary provider-button"
+            disabled={!googleEnabled || isSubmitting}
+            onClick={() => startProviderFlow("google")}
+            type="button"
+          >
+            Continuar con Google
+          </button>
+          <button
+            className="button-secondary provider-button"
+            disabled={!githubEnabled || isSubmitting}
+            onClick={() => startProviderFlow("github")}
+            type="button"
+          >
+            Continuar con GitHub
+          </button>
+        </div>
+        {!googleEnabled || !githubEnabled ? (
+          <p className="form-hint">
+            {googleEnabled || githubEnabled
+              ? "Uno de los proveedores sociales está listo; el otro necesita credenciales del servidor."
+              : "Google y GitHub necesitan credenciales OAuth del backend para activarse."}
+          </p>
+        ) : null}
+
         {mode === "register" ? (
           <form className="auth-form-grid" onSubmit={handleRegisterSubmit}>
             <label className="field-group" htmlFor="register-name">
@@ -300,6 +229,15 @@ export default function AuthModal({ isOpen, mode, onClose, onModeChange }) {
                 onChange={(event) => setRegisterForm((current) => ({ ...current, name: event.target.value }))}
                 placeholder="Nombre del cliente o taller"
                 value={registerForm.name}
+              />
+            </label>
+            <label className="field-group" htmlFor="register-username">
+              <span>Usuario</span>
+              <input
+                id="register-username"
+                onChange={(event) => setRegisterForm((current) => ({ ...current, username: event.target.value }))}
+                placeholder="sjhallo07 o marcos.mora"
+                value={registerForm.username}
               />
             </label>
             <label className="field-group" htmlFor="register-email">
@@ -369,13 +307,12 @@ export default function AuthModal({ isOpen, mode, onClose, onModeChange }) {
         ) : (
           <form className="auth-form-grid" onSubmit={handleLoginSubmit}>
             <label className="field-group" htmlFor="login-email">
-              <span>Correo</span>
+              <span>Usuario o correo</span>
               <input
                 id="login-email"
-                onChange={(event) => setLoginForm((current) => ({ ...current, email: event.target.value }))}
-                placeholder="cliente@correo.com"
-                type="email"
-                value={loginForm.email}
+                onChange={(event) => setLoginForm((current) => ({ ...current, identifier: event.target.value }))}
+                placeholder="sjhallo07 o cliente@correo.com"
+                value={loginForm.identifier}
               />
             </label>
             <label className="field-group" htmlFor="login-password">

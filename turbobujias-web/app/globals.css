@@ -76,11 +76,9 @@ button {
   margin-bottom: 1.5rem;
   border: 1px solid var(--border);
   border-radius: 28px;
-  background: linear-gradient(
-    135deg,
-    color-mix(in srgb, var(--surface) 94%, transparent),
-    color-mix(in srgb, var(--surface-soft) 90%, transparent)
-  );
+  background: linear-gradient(135deg,
+      color-mix(in srgb, var(--surface) 94%, transparent),
+      color-mix(in srgb, var(--surface-soft) 90%, transparent));
   box-shadow: var(--shadow);
 }
 
@@ -145,22 +143,23 @@ button {
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.22);
 }
+
 .brand-icon,
 .brand-logo {
   width: auto;
   height: auto;
   max-width: 100%;
-  }
-  
-  .brand-icon {
-    max-width: 74px;
-    max-height: 74px;
-    border-radius: 18px;
-  }
-  
-  .brand-logo {
-    max-width: min(320px, 60vw);
-    max-height: 92px;
+}
+
+.brand-icon {
+  max-width: 74px;
+  max-height: 74px;
+  border-radius: 18px;
+}
+
+.brand-logo {
+  max-width: min(320px, 60vw);
+  max-height: 92px;
 }
 
 .hero p,
@@ -271,6 +270,7 @@ button {
   resize: vertical;
   min-height: 110px;
 }
+
 .search-input-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -281,6 +281,7 @@ button {
 .search-submit-button {
   min-width: 120px;
 }
+
 .filters-grid {
   margin-top: 1rem;
 }
@@ -628,8 +629,8 @@ button {
 
 .support-card p,
 .scanner-card p,
-.panel > p,
-.cart-panel > p {
+.panel>p,
+.cart-panel>p {
   margin-top: 0.4rem;
 }
 
@@ -724,7 +725,9 @@ button {
 .ai-chatbot-error {
   color: var(--danger) !important;
 }
+
 @media (max-width: 960px) {
+
   .hero-grid,
   .content-grid,
   .support-grid,
@@ -736,9 +739,10 @@ button {
   .review-author {
     flex-direction: column;
   }
-.ai-chatbot-shell {
-  grid-template-columns: 1fr;
-}
+
+  .ai-chatbot-shell {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 640px) {
@@ -767,13 +771,14 @@ button {
     align-items: flex-start;
   }
 
-    .search-input-row {
-      grid-template-columns: 1fr;
-    }
-  
-    .search-submit-button {
-      width: 100%;
-    }
+  .search-input-row {
+    grid-template-columns: 1fr;
+  }
+
+  .search-submit-button {
+    width: 100%;
+  }
+
   .floating-contact-dock {
     right: 0.75rem;
     bottom: 0.75rem;
@@ -939,7 +944,19 @@ button {
   margin-bottom: 1rem;
 }
 
+.auth-provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.provider-button {
+  min-height: 48px;
+}
+
 @media (max-width: 960px) {
+
   .hero-topbar,
   .form-section {
     grid-template-columns: 1fr;
@@ -947,6 +964,7 @@ button {
 }
 
 @media (max-width: 640px) {
+
   .modal-card,
   .auth-summary-card,
   .diesel-card {

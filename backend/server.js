@@ -1,7 +1,11 @@
-require('dotenv').config();
+const path = require('node:path');
+
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
 const express = require('express');
 const cors = require('cors');
 
+const authRoutes = require('./routes/auth');
 const configRoutes = require('./routes/config');
 const inventoryRoutes = require('./routes/inventory');
 const paymentsRoutes = require('./routes/payments');
@@ -34,6 +38,7 @@ const allowedOrigins = buildAllowedOrigins();
 app.set('trust proxy', true);
 app.use(
   cors({
+    credentials: true,
     origin(origin, callback) {
       if (!origin || allowedOrigins.size === 0 || allowedOrigins.has(normalizeOrigin(origin))) {
         return callback(null, true);
@@ -46,6 +51,7 @@ app.use(
 app.use(express.json());
 
 // Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/config', configRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/payments', paymentsRoutes);

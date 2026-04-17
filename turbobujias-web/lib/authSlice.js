@@ -2,34 +2,37 @@ import { createSelector, createSlice } from "@reduxjs/toolkit";
 
 const initialState = {
   currentUser: null,
-  users: [],
   isHydrated: false,
 };
 
-const ADMIN_EMAILS = new Set([
-  "admin@turbobujiaspro.com",
-  "ventas@turbobujiaspro.com",
-  "soporte@turbobujiaspro.com",
-]);
-const ADMIN_DOMAINS = new Set(["turbobujiaspro.com", "turbobujias.com"]);
-const ADMIN_LOCAL_PART_PATTERN = /admin|ventas|manager|soporte/i;
+const SUPER_ADMIN_IDENTITIES = [
+  { username: "sjhallo07", email: "sjhallo07@turbobujiaspro.com" },
+  { username: "marcos.mora", email: "marcos.mora@turbobujiaspro.com" },
+];
+const SUPER_ADMIN_EMAILS = new Set(SUPER_ADMIN_IDENTITIES.map((item) => item.email));
+const SUPER_ADMIN_USERNAMES = new Set(SUPER_ADMIN_IDENTITIES.map((item) => item.username));
 
 function normalizeEmail(email) {
   return String(email || "").trim().toLowerCase();
 }
 
-export function detectAdminFromEmail(email) {
+export function normalizeUsername(username) {
+  return String(username || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ".")
+    .replace(/[^a-z0-9._-]/g, "");
+}
+
+export function detectAdminIdentity({ email, username }) {
   const normalizedEmail = normalizeEmail(email);
-  if (!normalizedEmail) {
+  const normalizedUsername = normalizeUsername(username);
+
+  if (!normalizedEmail && !normalizedUsername) {
     return false;
   }
 
-  if (ADMIN_EMAILS.has(normalizedEmail)) {
-    return true;
-  }
-
-  const [localPart = "", domain = ""] = normalizedEmail.split("@");
-  return Boolean(ADMIN_LOCAL_PART_PATTERN.test(localPart) || ADMIN_DOMAINS.has(domain));
+  return SUPER_ADMIN_EMAILS.has(normalizedEmail) || SUPER_ADMIN_USERNAMES.has(normalizedUsername);
 }
 
 function sanitizeStoredUser(user) {
@@ -38,20 +41,26 @@ function sanitizeStoredUser(user) {
   }
 
   const email = normalizeEmail(user.email);
+  const username = normalizeUsername(user.username || email.split("@")[0]);
   if (!email) {
     return null;
   }
 
+  const isSuperAdmin = Boolean(user.isSuperAdmin ?? detectAdminIdentity({ email, username }));
+
   return {
     id: String(user.id || `user-${email}`),
+    username,
     name: String(user.name || "Cliente Turbobujias").trim(),
     email,
     phone: String(user.phone || "").trim(),
     business: String(user.business || "").trim(),
-    passwordHash: String(user.passwordHash || "").trim(),
-    passwordSalt: String(user.passwordSalt || "").trim(),
-    isAdmin: Boolean(user.isAdmin ?? detectAdminFromEmail(email)),
+    authProviders: Array.isArray(user.authProviders) ? user.authProviders : [],
+    role: String(user.role || (isSuperAdmin ? "superadmin" : "client")).trim(),
+    isAdmin: Boolean(user.isAdmin ?? isSuperAdmin),
+    isSuperAdmin,
     createdAt: String(user.createdAt || new Date(0).toISOString()),
+    updatedAt: String(user.updatedAt || user.createdAt || new Date(0).toISOString()),
   };
 }
 
@@ -63,21 +72,24 @@ function sanitizeCurrentUser(user) {
 
   return {
     id: safeUser.id,
+    username: safeUser.username,
     name: safeUser.name,
     email: safeUser.email,
     phone: safeUser.phone,
     business: safeUser.business,
+    authProviders: safeUser.authProviders,
+    role: safeUser.role,
     isAdmin: safeUser.isAdmin,
+    isSuperAdmin: safeUser.isSuperAdmin,
     createdAt: safeUser.createdAt,
+    updatedAt: safeUser.updatedAt,
   };
 }
 
 function sanitizePayload(payload) {
-  const rawUsers = Array.isArray(payload?.users) ? payload.users : [];
-  const users = rawUsers.map(sanitizeStoredUser).filter(Boolean);
   const currentUser = sanitizeCurrentUser(payload?.currentUser);
 
-  return { currentUser, users };
+  return { currentUser };
 }
 
 const authSlice = createSlice({
@@ -87,34 +99,22 @@ const authSlice = createSlice({
     hydrateAuthState(state, action) {
       const nextState = sanitizePayload(action.payload || {});
       state.currentUser = nextState.currentUser;
-      state.users = nextState.users;
       state.isHydrated = true;
     },
-    registerSuccess(state, action) {
-      const registeredUser = sanitizeStoredUser(action.payload);
-      if (!registeredUser) {
-        return;
-      }
-
-      state.users = [
-        registeredUser,
-        ...state.users.filter((user) => user.email !== registeredUser.email),
-      ];
-      state.currentUser = sanitizeCurrentUser(registeredUser);
-    },
-    loginSuccess(state, action) {
+    setCurrentUser(state, action) {
       state.currentUser = sanitizeCurrentUser(action.payload);
+      state.isHydrated = true;
     },
     logout(state) {
       state.currentUser = null;
+      state.isHydrated = true;
     },
   },
 });
 
-export const { hydrateAuthState, registerSuccess, loginSuccess, logout } = authSlice.actions;
+export const { hydrateAuthState, setCurrentUser, logout } = authSlice.actions;
 
 export const selectAuthState = (state) => state.auth;
-export const selectAuthUsers = createSelector([selectAuthState], (auth) => auth.users);
 export const selectCurrentUser = createSelector([selectAuthState], (auth) => auth.currentUser);
 export const selectIsAuthenticated = createSelector(
   [selectCurrentUser],
@@ -124,5 +124,7 @@ export const selectIsAdmin = createSelector(
   [selectCurrentUser],
   (currentUser) => Boolean(currentUser?.isAdmin)
 );
+export const selectIsHydrated = createSelector([selectAuthState], (auth) => auth.isHydrated);
+export const selectSuperAdminIdentities = () => SUPER_ADMIN_IDENTITIES;
 
 export default authSlice.reducer;

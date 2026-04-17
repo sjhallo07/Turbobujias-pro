@@ -7,7 +7,7 @@ import AiChatbot from "./ai-chatbot";
 import AuthModal from "./auth-modal";
 import ContactForms from "./contact-forms";
 import QrScanner from "./qr-scanner";
-import { logout, selectCurrentUser, selectIsAdmin } from "../lib/authSlice";
+import { hydrateAuthState, logout, selectCurrentUser, selectIsAdmin } from "../lib/authSlice";
 import {
   addToCart,
   clearCart,
@@ -585,6 +585,38 @@ export default function Storefront() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [authMode, setAuthMode] = useState("login");
 
+  useEffect(() => {
+    let isMounted = true;
+
+    async function fetchCurrentUser() {
+      try {
+        const response = await fetch(`${API_URL}/auth/me`, {
+          cache: "no-store",
+          credentials: "include",
+        });
+
+        if (!response.ok) {
+          throw new Error("No se pudo recuperar la sesión actual.");
+        }
+
+        const payload = await response.json();
+        if (isMounted) {
+          dispatch(hydrateAuthState({ currentUser: payload.currentUser || null }));
+        }
+      } catch (error) {
+        if (isMounted) {
+          dispatch(hydrateAuthState({ currentUser: null }));
+        }
+      }
+    }
+
+    fetchCurrentUser();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [dispatch]);
+
   const whatsappUrl = runtimeConfig?.links?.whatsappUrl || DEFAULT_WHATSAPP_URL;
   const instagramUrl = runtimeConfig?.links?.instagramUrl || DEFAULT_INSTAGRAM_URL;
   const mercadoLibreUrl = runtimeConfig?.links?.mercadoLibreUrl || DEFAULT_MERCADOLIBRE_URL;
@@ -607,6 +639,19 @@ export default function Storefront() {
   function openAuthModal(nextMode) {
     setAuthMode(nextMode);
     setIsAuthModalOpen(true);
+  }
+
+  async function handleLogout() {
+    try {
+      await fetch(`${API_URL}/auth/logout`, {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (error) {
+      console.warn("No se pudo cerrar la sesión en el backend.", error);
+    } finally {
+      dispatch(logout());
+    }
   }
 
   function handleConsultWithAI(selectedItem) {
@@ -767,15 +812,15 @@ export default function Storefront() {
                     <strong>{currentUser ? currentUser.name : "Login / registro"}</strong>
                     <p>
                       {currentUser
-                        ? `${currentUser.email}${isAdmin ? " · Perfil administrador" : " · Perfil cliente"}`
-                        : "Guarda datos, arma cotizaciones y detecta cuentas admin por correo."}
+                        ? `${currentUser.email}${isAdmin ? " · Superadmin" : " · Perfil cliente"}`
+                        : "Acceso con email/contraseña o Google/GitHub para clientes y admins autorizados."}
                     </p>
                   </div>
                   <div className="actions-row">
                     {currentUser ? (
                       <>
-                        <span className={`pill ${isAdmin ? "success" : ""}`}>{isAdmin ? "Admin" : "Cliente"}</span>
-                        <button className="button-secondary" onClick={() => dispatch(logout())} type="button">
+                        <span className={`pill ${isAdmin ? "success" : ""}`}>{isAdmin ? "Superadmin" : "Cliente"}</span>
+                        <button className="button-secondary" onClick={handleLogout} type="button">
                           Cerrar sesión
                         </button>
                       </>
@@ -795,8 +840,8 @@ export default function Storefront() {
 
               <h1>Turbobujias Pro</h1>
               <p>
-                E-commerce automotriz con búsqueda por SKU/UPC, login y registro modal, carrito Redux,
-                detección de administradores y precios en USD/EUR/VES para bujías, calentadores y repuestos diésel.
+                E-commerce automotriz con búsqueda por SKU/UPC, login y registro modal, superadmins preconfigurados,
+                soporte para email/Google/GitHub y precios en USD/EUR/VES para bujías, calentadores y repuestos diésel.
               </p>
 
               <div className="button-row">
@@ -882,7 +927,7 @@ export default function Storefront() {
             <p>
               {currentUser
                 ? `Cuenta activa para ${currentUser.name}${currentUser.business ? ` · ${currentUser.business}` : ""}.`
-                : "Inicia sesión para reutilizar datos en contacto y cotizaciones express."}
+                : "Inicia sesión para reutilizar datos, conectar Google/GitHub y preparar cotizaciones express."}
             </p>
           </article>
         </section>
@@ -1069,7 +1114,7 @@ export default function Storefront() {
             <ul className="feature-list">
               <li>Integración lista para Pago Móvil, transferencias y PayPal.</li>
               <li>Carrito con Redux Toolkit y actualización instantánea.</li>
-              <li>Autenticación local persistida para clientes y administradores.</li>
+              <li>Autenticación persistida para clientes y superadmins autorizados.</li>
             </ul>
           </div>
 
@@ -1176,6 +1221,7 @@ export default function Storefront() {
       </div>
 
       <AuthModal
+        authConfig={runtimeConfig?.auth}
         isOpen={isAuthModalOpen}
         mode={authMode}
         onClose={() => setIsAuthModalOpen(false)}

@@ -1,4 +1,5 @@
 const express = require('express');
+const { createPublicAuthConfig } = require('../auth/authStore');
 
 const router = express.Router();
 
@@ -86,6 +87,7 @@ router.get('/public', (req, res) => {
     const frontendPublicUrl = resolveFrontendPublicUrl(req);
     const chatbotPublicUrl = resolveChatbotPublicUrl(req);
     const chatbotApiBaseUrl = resolveChatbotApiBaseUrl(req);
+    const authBaseUrl = `${backendPublicUrl}/api/auth`;
 
     res.json({
         backend: {
@@ -97,6 +99,7 @@ router.get('/public', (req, res) => {
         frontend: {
             publicUrl: frontendPublicUrl,
         },
+        auth: createPublicAuthConfig(authBaseUrl),
         chatbot: {
             publicUrl: chatbotPublicUrl,
             requestUrl: `${chatbotApiBaseUrl}/chat`,
