@@ -10,6 +10,7 @@ Stack:
 """
 
 import json
+import importlib
 import logging
 import os
 import re
@@ -20,7 +21,6 @@ from typing import Any, cast
 
 import gradio as gr
 import requests
-import whisper
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from huggingface_hub import InferenceClient
@@ -31,6 +31,11 @@ from langchain_community.vectorstores import FAISS
 from openai import OpenAI
 from pydantic import BaseModel, Field
 import uvicorn
+
+try:
+    whisper = cast(Any, importlib.import_module("whisper"))
+except ImportError:
+    whisper = None
 
 logging.basicConfig(level=logging.INFO)
 _log = logging.getLogger(__name__)
@@ -725,6 +730,14 @@ if GITHUB_TOKEN:
 # ─────────────────────────────────────────────
 # 4. Whisper model for voice transcription
 # ─────────────────────────────────────────────
+if whisper is None:
+    print(
+        "ERROR: openai-whisper is not installed in the active Python environment. "
+        "Install it with `python -m pip install openai-whisper` or use the project's requirements.txt.",
+        file=sys.stderr,
+    )
+    sys.exit(1)
+
 print("Loading Whisper model…")
 whisper_model = whisper.load_model("base")
 
