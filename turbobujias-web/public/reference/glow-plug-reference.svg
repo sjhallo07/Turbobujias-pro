@@ -1,0 +1,15 @@
+<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="360" rx="28" fill="#0B1120"/>
+  <rect x="40" y="40" width="560" height="280" rx="24" fill="#131D33" stroke="#355C7D"/>
+  <g transform="translate(80 74)">
+    <rect x="0" y="74" width="360" height="34" rx="16" fill="#CBD5E1"/>
+    <rect x="42" y="58" width="190" height="66" rx="18" fill="#E2E8F0"/>
+    <rect x="100" y="46" width="74" height="90" rx="18" fill="#F8FAFC"/>
+    <rect x="114" y="0" width="46" height="58" rx="14" fill="#FBBF24"/>
+    <path d="M360 91H498" stroke="#F8FAFC" stroke-width="16" stroke-linecap="round"/>
+    <path d="M498 91L548 122" stroke="#60A5FA" stroke-width="14" stroke-linecap="round"/>
+    <circle cx="556" cy="126" r="12" fill="#38BDF8"/>
+  </g>
+  <text x="68" y="300" fill="#F8FAFC" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700">Calentador / Glow Plug</text>
+  <text x="68" y="328" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="18">Cuerpo más largo y punta fina para arranque en frío diésel.</text>
+</svg>

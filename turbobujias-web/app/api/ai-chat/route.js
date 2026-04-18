@@ -96,10 +96,11 @@ export async function POST(request) {
         const body = await request.json();
         const message = typeof body.message === "string" ? body.message.trim() : "";
         const history = Array.isArray(body.history) ? body.history : [];
+        const imageDataUrl = typeof body.imageDataUrl === "string" ? body.imageDataUrl.trim() : "";
 
-        if (!message) {
+        if (!message && !imageDataUrl) {
             return NextResponse.json(
-                { error: "The message field is required." },
+                { error: "The message or imageDataUrl field is required." },
                 { status: 400 }
             );
         }
@@ -117,6 +118,7 @@ export async function POST(request) {
             body: JSON.stringify({
                 message,
                 history,
+                imageDataUrl,
             }),
         });
 

@@ -72,6 +72,18 @@ export default function AuthModal({ authConfig, isOpen, mode, onClose, onModeCha
       return;
     }
 
+    const popup = window.open(
+      providerUrl,
+      `tb-auth-${provider}`,
+      "popup=yes,width=720,height=760,noopener,noreferrer"
+    );
+
+    if (popup) {
+      popup.focus();
+      setStatus(`Abriendo ${provider} en una ventana secundaria segura…`);
+      return;
+    }
+
     window.location.assign(providerUrl);
   }
 
