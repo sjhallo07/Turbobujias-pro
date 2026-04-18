@@ -1,5 +1,6 @@
 const express = require('express');
 const { createPublicAuthConfig } = require('../auth/authStore');
+const { resolveDatasetViewerBaseUrl } = require('../lib/datasetViewer');
 
 const router = express.Router();
 
@@ -71,10 +72,6 @@ function resolveChatbotApiBaseUrl(req) {
     }
 
     return resolveBackendPublicUrl(req);
-}
-
-function resolveDatasetViewerBaseUrl() {
-    return normalizeBaseUrl(process.env.DATASET_VIEWER_BASE_URL) || 'https://datasets-server.huggingface.co';
 }
 
 function buildFrontendRedirect(req, pathname) {

@@ -1,11 +1,13 @@
 const express = require('express');
 const axios = require('axios');
 const { pipeline } = require('node:stream/promises');
+const {
+  resolveDatasetViewerBaseUrl,
+  resolveDatasetViewerTimeoutMs,
+} = require('../lib/datasetViewer');
 
 const router = express.Router();
 
-const DEFAULT_DATASET_VIEWER_BASE_URL = 'https://datasets-server.huggingface.co';
-const DEFAULT_TIMEOUT_MS = 15000;
 const ALLOWED_ENDPOINTS = new Set([
   'healthcheck',
   'metrics',
@@ -29,19 +31,6 @@ const FORWARDED_HEADERS = [
   'etag',
   'last-modified',
 ];
-
-function normalizeBaseUrl(value) {
-  return String(value || '').trim().replace(/\/+$/, '');
-}
-
-function resolveDatasetViewerBaseUrl() {
-  return normalizeBaseUrl(process.env.DATASET_VIEWER_BASE_URL) || DEFAULT_DATASET_VIEWER_BASE_URL;
-}
-
-function resolveTimeoutMs() {
-  const rawValue = Number.parseInt(String(process.env.DATASET_VIEWER_TIMEOUT_MS || ''), 10);
-  return Number.isFinite(rawValue) && rawValue > 0 ? rawValue : DEFAULT_TIMEOUT_MS;
-}
 
 function buildUpstreamUrl(endpoint, query) {
   if (!ALLOWED_ENDPOINTS.has(endpoint)) {
@@ -83,7 +72,7 @@ async function proxyRequest(req, res) {
         accept: req.get('accept') || '*/*',
       },
       responseType: 'stream',
-      timeout: resolveTimeoutMs(),
+      timeout: resolveDatasetViewerTimeoutMs(),
       validateStatus: () => true,
     });
 
@@ -99,6 +88,7 @@ async function proxyRequest(req, res) {
     const status = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' ? 504 : 502;
     res.status(status).json({
       error: 'dataset_viewer_unavailable',
+      code: error.code || 'UNKNOWN',
       message: 'The dataset viewer upstream is unavailable.',
       upstreamBaseUrl: resolveDatasetViewerBaseUrl(),
     });
