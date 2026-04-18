@@ -439,8 +439,8 @@ def decode_image_data_url(image_data_url: str) -> tuple[str, str]:
         raise ValueError("Image payload must be a valid base64 data URL.")
 
     mime_type = match.group(1)
-    cleaned = match.group(2).replace("\n", "").replace("\r", "")
-    base64.b64decode(cleaned, validate=True)
+    cleaned = re.sub(r"\s+", "", match.group(2))
+    _decoded_image = base64.b64decode(cleaned, validate=True)
     return mime_type, cleaned
 
 
@@ -1174,7 +1174,12 @@ def chat_api(
         }
 
     try:
-        answer, sources = answer_query(message, current_history, image_data_url=image_data_url.strip() or None)
+        normalized_image_data_url = str(image_data_url or "").strip()
+        answer, sources = answer_query(
+            message,
+            current_history,
+            image_data_url=normalized_image_data_url or None,
+        )
     except Exception as exc:
         answer = _safe_llm_error_message(exc)
         sources = []

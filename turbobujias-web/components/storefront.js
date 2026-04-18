@@ -790,7 +790,7 @@ export default function Storefront() {
     return {
       totalProducts: items.length,
       totalStock,
-      totalBrands: new Set(items.map((item) => item.brand)).size,
+      totalBrands: new Set(items.map((item) => item.brand).filter(Boolean)).size,
       lowStockCount,
       glowPlugCount,
     };
