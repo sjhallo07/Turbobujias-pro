@@ -38,8 +38,7 @@ function buildUpstreamUrl(endpoint, query) {
     return null;
   }
 
-  const pathname = `/${endpoint}`;
-  const upstreamUrl = new URL(pathname, `${resolveDatasetViewerBaseUrl()}/`);
+  const upstreamUrl = new URL(endpoint, `${resolveDatasetViewerBaseUrl()}/`);
 
   for (const [key, value] of Object.entries(query || {})) {
     if (Array.isArray(value)) {
@@ -86,7 +85,7 @@ async function proxyRequest(req, res) {
     res.status(response.status);
     await pipeline(response.data, res);
   } catch (error) {
-    const status = TIMEOUT_ERROR_CODES.has(error.code) ? 504 : 502;
+    const status = error.code && TIMEOUT_ERROR_CODES.has(error.code) ? 504 : 502;
     res.status(status).json({
       error: 'dataset_viewer_unavailable',
       code: error.code || 'UNKNOWN',
