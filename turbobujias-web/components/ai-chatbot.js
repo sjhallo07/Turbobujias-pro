@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const SUGGESTED_PROMPTS = [
@@ -332,7 +333,13 @@ export default function AiChatbot({ publicChatUrl = DEFAULT_PUBLIC_CHAT_URL }) {
                 </label>
                 {imageDataUrl ? (
                     <div className="ai-chatbot-image-preview">
-                        <img alt={imageName || "Imagen seleccionada"} src={imageDataUrl} />
+                        <Image
+                            alt={imageName || "Imagen seleccionada"}
+                            height={260}
+                            src={imageDataUrl}
+                            unoptimized
+                            width={520}
+                        />
                         <div className="actions-row">
                             <span className="muted">{imageName || "Imagen lista para análisis"}</span>
                             <button
