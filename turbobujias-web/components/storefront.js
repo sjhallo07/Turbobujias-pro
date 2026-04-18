@@ -97,6 +97,28 @@ const DIESEL_PART_CATEGORIES = [
     ctaMessage: "Hola, necesito cotizar filtros diésel para mantenimiento.",
   },
 ];
+const REFERENCE_GUIDES = [
+  {
+    slug: "spark-reference",
+    title: "Referencia visual de bujías",
+    image: "/reference/spark-plug-reference.svg",
+    category: "spark_plug",
+    searchTerm: "bujía spark plug",
+    detail: "Guía rápida para reconocer cuerpo, rosca, hex y punta de encendido.",
+    prompt:
+      "Analiza una referencia visual de bujía y explícame cómo diferenciarla de un calentador diésel.",
+  },
+  {
+    slug: "glow-reference",
+    title: "Referencia visual de calentadores diésel",
+    image: "/reference/glow-plug-reference.svg",
+    category: "diesel_glow_plug",
+    searchTerm: "calentador glow plug diesel",
+    detail: "Identifica terminal, cuerpo largo y geometría típica de arranque en frío.",
+    prompt:
+      "Analiza una referencia visual de calentador diésel y dime qué señales sirven para reconocerlo.",
+  },
+];
 const CUSTOMER_REVIEWS = [
   {
     name: "Luis R.",
@@ -185,6 +207,12 @@ function buildInstagramSearchUrl(baseUrl, query) {
 
   const encodedQuery = encodeURIComponent(`site:instagram.com/turbobujiaspro ${normalizedQuery}`);
   return `https://www.google.com/search?q=${encodedQuery}`;
+}
+
+function buildGoogleCatalogSearchUrl(query) {
+  const normalizedQuery = String(query || "").trim();
+  const searchText = normalizedQuery || "spark plugs glow plugs diesel parts Turbobujias Pro";
+  return `https://www.google.com/search?q=${encodeURIComponent(searchText)}`;
 }
 
 function convertLineTotal(lineTotal, currencyCode, exchangeRate) {
@@ -690,6 +718,19 @@ export default function Storefront() {
     scrollToSection("contact-section");
   }
 
+  function handleReferenceGuide(referenceItem) {
+    setQuery(referenceItem.searchTerm);
+    setCategory(referenceItem.category);
+    scrollToSection("ai-chatbot-section");
+    window.dispatchEvent(
+      new CustomEvent("tb-ai-prefill", {
+        detail: {
+          prompt: referenceItem.prompt,
+        },
+      })
+    );
+  }
+
   const floatingWhatsAppUrl = buildWhatsAppUrl(
     whatsappUrl,
     "Hola, necesito ayuda con catálogo, pagos o disponibilidad en Turbobujias Pro."
@@ -744,9 +785,12 @@ export default function Storefront() {
   const stats = useMemo(() => {
     const lowStockCount = items.filter((item) => item.stock < 50).length;
     const glowPlugCount = items.filter((item) => item.type === "diesel_glow_plug").length;
+    const totalStock = items.reduce((sum, item) => sum + (parseInt(item.stock, 10) || 0), 0);
 
     return {
       totalProducts: items.length,
+      totalStock,
+      totalBrands: new Set(items.map((item) => item.brand).filter(Boolean)).size,
       lowStockCount,
       glowPlugCount,
     };
@@ -887,16 +931,16 @@ export default function Storefront() {
                 <span>SKUs en catálogo</span>
               </div>
               <div className="stat-card">
+                <strong>{stats.totalStock}</strong>
+                <span>Unidades en inventario</span>
+              </div>
+              <div className="stat-card">
                 <strong>{stats.glowPlugCount}</strong>
                 <span>Calentadores diésel</span>
               </div>
               <div className="stat-card">
-                <strong>{formatRateValue(exchangeRates.usd_ves)}</strong>
-                <span>USD → VES · {rateSource}</span>
-              </div>
-              <div className="stat-card">
-                <strong>{formatRateValue(exchangeRates.eur_ves)}</strong>
-                <span>EUR → VES · actualiza diario</span>
+                <strong>{stats.totalBrands}</strong>
+                <span>Marcas registradas</span>
               </div>
             </div>
           </div>
@@ -978,6 +1022,60 @@ export default function Storefront() {
                 </article>
               ))}
             </div>
+            <div className="actions-row" style={{ marginTop: "1rem" }}>
+              <a
+                className="button-secondary text-button"
+                href={buildWhatsAppUrl(
+                  whatsappUrl,
+                  "Hola, quiero dejar feedback sobre la experiencia en Turbobujias Pro."
+                )}
+                rel="noreferrer"
+                target="_blank"
+              >
+                Dejar feedback
+              </a>
+            </div>
+          </div>
+        </section>
+
+        <section className="panel">
+          <div className="section-heading">
+            <div>
+              <h2>Imágenes referenciales</h2>
+              <p>Usa estas referencias rápidas para distinguir bujías y calentadores antes de consultar al chatbot o al catálogo.</p>
+            </div>
+            <span className="tag">Visual guide</span>
+          </div>
+          <div className="reference-grid">
+            {REFERENCE_GUIDES.map((referenceItem) => (
+              <article className="reference-card" key={referenceItem.slug}>
+                <Image
+                  alt={referenceItem.title}
+                  className="reference-image"
+                  height={180}
+                  src={referenceItem.image}
+                  width={180}
+                />
+                <strong>{referenceItem.title}</strong>
+                <p>{referenceItem.detail}</p>
+                <div className="actions-row">
+                  <button className="button-secondary" onClick={() => handleReferenceGuide(referenceItem)} type="button">
+                    Consultar con IA
+                  </button>
+                  <button
+                    className="button-primary"
+                    onClick={() => {
+                      setQuery(referenceItem.searchTerm);
+                      setCategory(referenceItem.category);
+                      scrollToSection("catalog-section");
+                    }}
+                    type="button"
+                  >
+                    Filtrar catálogo
+                  </button>
+                </div>
+              </article>
+            ))}
           </div>
         </section>
 
@@ -1028,6 +1126,18 @@ export default function Storefront() {
             </div>
 
             <div className="actions-row search-actions-row">
+              <a
+                className="button-secondary text-button"
+                href={buildGoogleCatalogSearchUrl(
+                  [query, vehicle, brand !== "all" ? brand : "", category !== "all" ? category : ""]
+                    .filter(Boolean)
+                    .join(" ")
+                )}
+                rel="noreferrer"
+                target="_blank"
+              >
+                Buscar en Google
+              </a>
               <a className="button-secondary text-button" href={instagramSearchUrl} rel="noreferrer" target="_blank">
                 Buscar en Instagram
               </a>
@@ -1168,7 +1278,7 @@ export default function Storefront() {
         </div>
 
         <section style={{ marginTop: "1.5rem" }}>
-          <AiChatbot />
+          <AiChatbot publicChatUrl={chatbotPublicUrl} />
         </section>
 
         <section id="catalog-section" style={{ marginTop: "1.5rem" }}>

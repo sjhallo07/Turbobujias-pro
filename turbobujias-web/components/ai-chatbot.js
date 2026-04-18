@@ -1,12 +1,32 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const SUGGESTED_PROMPTS = [
     "¿Qué bujía sirve para Toyota Corolla 2014 1.8?",
     "Necesito un calentador para Hilux 2.5 diesel 2012.",
-    "Compare NGK y Bosch para un Civic 1.6 1998.",
+    "Dame el resumen total del inventario y la base de datos.",
+    "Analiza una foto de una bujía o calentador y dime qué ves.",
 ];
+
+const DEFAULT_PUBLIC_CHAT_URL =
+    process.env.NEXT_PUBLIC_HF_SPACE_URL || "https://sjhallo07-turbobujias-ai.hf.space";
+
+function buildGoogleSearchUrl(query) {
+    const normalizedQuery = String(query || "").trim();
+    const searchText = normalizedQuery || "spark plugs glow plugs diesel parts Turbobujias Pro";
+    return `https://www.google.com/search?q=${encodeURIComponent(searchText)}`;
+}
+
+function readFileAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ""));
+        reader.onerror = () => reject(new Error("No se pudo leer la imagen seleccionada."));
+        reader.readAsDataURL(file);
+    });
+}
 
 function normalizeChatPayload(result) {
     const raw = result?.data;
@@ -27,33 +47,45 @@ function normalizeChatPayload(result) {
     };
 }
 
-export default function AiChatbot() {
+export default function AiChatbot({ publicChatUrl = DEFAULT_PUBLIC_CHAT_URL }) {
     const endpointRef = useRef("/api/ai-chat");
     const [messages, setMessages] = useState([
         {
             role: "assistant",
             content:
-                "Hola, soy el asistente de Turbobujias Pro. Pregúntame por compatibilidad, SKU, UPC o aplicaciones de bujías y calentadores.",
+                "Hola, soy el asistente de Turbobujias Pro. Pregúntame por compatibilidad, SKU, UPC, totales de inventario o envíame una foto de la pieza.",
             sources: [],
         },
     ]);
     const [history, setHistory] = useState([]);
     const [input, setInput] = useState("");
+    const [imageDataUrl, setImageDataUrl] = useState("");
+    const [imageName, setImageName] = useState("");
     const [isConnecting, setIsConnecting] = useState(false);
     const [isSending, setIsSending] = useState(false);
     const [status, setStatus] = useState("Listo para ayudarte.");
     const [error, setError] = useState("");
 
-    const canSend = input.trim().length > 0 && !isSending;
+    const canSend = (input.trim().length > 0 || Boolean(imageDataUrl)) && !isSending;
+    const searchSeed = useMemo(() => {
+        if (input.trim()) {
+            return input.trim();
+        }
+
+        const latestUserMessage = [...messages].reverse().find((message) => message.role === "user");
+        return latestUserMessage?.content || "";
+    }, [input, messages]);
     const helperText = useMemo(() => {
         if (isConnecting) {
             return "Conectando con el Space de Gradio…";
         }
         if (isSending) {
-            return "Consultando catálogo y generando respuesta…";
+            return imageDataUrl
+                ? "Analizando imagen, catálogo y compatibilidad…"
+                : "Consultando catálogo y generando respuesta…";
         }
         return status;
-    }, [isConnecting, isSending, status]);
+    }, [imageDataUrl, isConnecting, isSending, status]);
 
     useEffect(() => {
         function handlePrefill(event) {
@@ -78,16 +110,23 @@ export default function AiChatbot() {
         }
     }
 
-    async function sendMessage(messageText) {
+    async function sendMessage(messageText, attachedImageDataUrl = imageDataUrl, attachedImageName = imageName) {
         const message = messageText.trim();
-        if (!message || isSending) {
+        if ((!message && !attachedImageDataUrl) || isSending) {
             return;
         }
 
         setIsSending(true);
         setError("");
         setInput("");
-        setMessages((current) => [...current, { role: "user", content: message, sources: [] }]);
+        setMessages((current) => [
+            ...current,
+            {
+                role: "user",
+                content: message || `Imagen enviada para análisis${attachedImageName ? `: ${attachedImageName}` : "."}`,
+                sources: [],
+            },
+        ]);
 
         try {
             const endpoint = await getClient();
@@ -99,6 +138,7 @@ export default function AiChatbot() {
                 body: JSON.stringify({
                     message,
                     history,
+                    imageDataUrl: attachedImageDataUrl,
                 }),
             });
             const result = await response.json();
@@ -120,6 +160,8 @@ export default function AiChatbot() {
                 },
             ]);
             setStatus(payload.sources?.length ? `Fuentes: ${payload.sources.join(", ")}` : "Respuesta lista.");
+            setImageDataUrl("");
+            setImageName("");
         } catch (sendError) {
             const messageText =
                 sendError instanceof Error
@@ -138,6 +180,35 @@ export default function AiChatbot() {
             setStatus("Error de conexión.");
         } finally {
             setIsSending(false);
+        }
+    }
+
+    async function handleImageChange(event) {
+        const file = event.target.files?.[0];
+        if (!file) {
+            setImageDataUrl("");
+            setImageName("");
+            return;
+        }
+
+        if (!file.type.startsWith("image/")) {
+            setError("Selecciona una imagen válida para analizar la pieza.");
+            return;
+        }
+
+        if (file.size > 4 * 1024 * 1024) {
+            setError("La imagen debe pesar menos de 4 MB.");
+            return;
+        }
+
+        try {
+            const nextImageDataUrl = await readFileAsDataUrl(file);
+            setError("");
+            setImageDataUrl(nextImageDataUrl);
+            setImageName(file.name);
+            setStatus("Imagen lista para análisis visual.");
+        } catch (imageError) {
+            setError(imageError instanceof Error ? imageError.message : "No se pudo cargar la imagen.");
         }
     }
 
@@ -201,8 +272,40 @@ export default function AiChatbot() {
                     </div>
 
                     <div className="support-card ai-chatbot-card">
+                        <strong>Herramientas rápidas</strong>
+                        <div className="ai-chatbot-prompts">
+                            <button
+                                className="button-secondary"
+                                onClick={() => void sendMessage("Dame el resumen total del inventario y la base de datos.")}
+                                type="button"
+                            >
+                                Leer inventario total
+                            </button>
+                            <a
+                                className="button-secondary text-button"
+                                href={buildGoogleSearchUrl(searchSeed)}
+                                rel="noreferrer"
+                                target="_blank"
+                            >
+                                Web search en Google
+                            </a>
+                            <a
+                                className="button-secondary text-button"
+                                href={publicChatUrl}
+                                rel="noreferrer"
+                                target="_blank"
+                            >
+                                Abrir en ventana secundaria
+                            </a>
+                        </div>
+                    </div>
+
+                    <div className="support-card ai-chatbot-card">
                         <strong>Estado</strong>
                         <p>{helperText}</p>
+                        <p className="muted">
+                            Sube una foto para reconocimiento visual u obtén apoyo con QR, SKU, UPC y búsquedas web.
+                        </p>
                         {error ? <p className="ai-chatbot-error">{error}</p> : null}
                     </div>
                 </div>
@@ -219,9 +322,42 @@ export default function AiChatbot() {
                         value={input}
                     />
                 </label>
+                <label className="field-group" htmlFor="ai-chatbot-image">
+                    <span>Imagen de referencia (opcional)</span>
+                    <input
+                        accept="image/*"
+                        id="ai-chatbot-image"
+                        onChange={(event) => void handleImageChange(event)}
+                        type="file"
+                    />
+                </label>
+                {imageDataUrl ? (
+                    <div className="ai-chatbot-image-preview">
+                        <Image
+                            alt={imageName || "Imagen seleccionada"}
+                            height={260}
+                            src={imageDataUrl}
+                            unoptimized
+                            width={520}
+                        />
+                        <div className="actions-row">
+                            <span className="muted">{imageName || "Imagen lista para análisis"}</span>
+                            <button
+                                className="button-secondary"
+                                onClick={() => {
+                                    setImageDataUrl("");
+                                    setImageName("");
+                                }}
+                                type="button"
+                            >
+                                Quitar imagen
+                            </button>
+                        </div>
+                    </div>
+                ) : null}
                 <div className="actions-row">
                     <button className="button-primary" disabled={!canSend} type="submit">
-                        {isSending ? "Consultando…" : "Enviar mensaje"}
+                        {isSending ? "Consultando…" : imageDataUrl ? "Enviar imagen y mensaje" : "Enviar mensaje"}
                     </button>
                     <button
                         className="button-secondary"
@@ -230,12 +366,14 @@ export default function AiChatbot() {
                                 {
                                     role: "assistant",
                                     content:
-                                        "Hola, soy el asistente de Turbobujias Pro. Pregúntame por compatibilidad, SKU, UPC o aplicaciones de bujías y calentadores.",
+                                        "Hola, soy el asistente de Turbobujias Pro. Pregúntame por compatibilidad, SKU, UPC, totales de inventario o envíame una foto de la pieza.",
                                     sources: [],
                                 },
                             ]);
                             setHistory([]);
                             setInput("");
+                            setImageDataUrl("");
+                            setImageName("");
                             setError("");
                             setStatus("Conversación reiniciada.");
                         }}

@@ -9,6 +9,7 @@ Stack:
   - mistralai/Mistral-7B-Instruct-v0.2 via HuggingFaceHub (LLM)
 """
 
+import base64
 import json
 import importlib
 import logging
@@ -225,6 +226,8 @@ ENGLISH_HINT_TOKENS: frozenset[str] = frozenset(
         "barcode",
     }
 )
+DEFAULT_CATALOG_QUERY = "spark plug glow plug diesel part catalog"
+IMAGE_ONLY_HISTORY_LABEL = "[análisis de imagen]"
 
 
 def detect_response_language(text: str) -> str:
@@ -326,6 +329,129 @@ def get_provider_execution_order() -> list[str]:
             preferred_order.append(provider_name)
 
     return preferred_order
+
+
+def build_inventory_summary() -> dict[str, Any]:
+    brand_counts: dict[str, int] = {}
+    category_counts: dict[str, int] = {}
+    total_stock = 0
+
+    for item in inventory_items:
+        brand = str(item.get("brand", "")).strip() or "Sin marca"
+        raw_type = str(item.get("type", "")).strip()
+        category = "Calentadores" if raw_type == "diesel_glow_plug" else "Bujías"
+        brand_counts[brand] = brand_counts.get(brand, 0) + 1
+        category_counts[category] = category_counts.get(category, 0) + 1
+        total_stock += max(0, int(item.get("stock", 0) or 0))
+
+    top_brands = sorted(brand_counts.items(), key=lambda item: (-item[1], item[0]))[:5]
+
+    return {
+        "total_products": len(inventory_items),
+        "total_stock": total_stock,
+        "total_brands": len(brand_counts),
+        "categories": category_counts,
+        "top_brands": top_brands,
+    }
+
+
+def is_inventory_summary_query(query: str) -> bool:
+    lowered = query.casefold().strip()
+    if not lowered:
+        return False
+
+    summary_tokens = (
+        "inventory total",
+        "total inventory",
+        "total stock",
+        "catalog summary",
+        "database summary",
+        "inventory summary",
+        "total catalog",
+        "total products",
+        "resumen inventario",
+        "resumen del inventario",
+        "resumen catálogo",
+        "resumen catalogo",
+        "resumen base de datos",
+        "total inventario",
+        "total stock",
+        "total catálogo",
+        "total catalogo",
+        "cuanto inventario",
+        "cuánto inventario",
+        "cuantos productos",
+        "cuántos productos",
+        "base de datos",
+    )
+    return any(token in lowered for token in summary_tokens)
+
+
+def build_inventory_summary_answer(query: str) -> str:
+    summary = build_inventory_summary()
+    language = detect_response_language(query)
+    top_brands_text = ", ".join(
+        f"{brand} ({count})" for brand, count in summary["top_brands"]
+    ) or "N/A"
+
+    if language == "en":
+        return "\n".join(
+            [
+                "**Catalog database summary**",
+                "",
+                f"- **Total SKUs:** {summary['total_products']}",
+                f"- **Total units in stock:** {summary['total_stock']}",
+                f"- **Brands represented:** {summary['total_brands']}",
+                f"- **Spark plugs:** {summary['categories'].get('Bujías', 0)}",
+                f"- **Glow plugs:** {summary['categories'].get('Calentadores', 0)}",
+                f"- **Top brands:** {top_brands_text}",
+                "",
+                "If you want, I can also narrow this down by brand, SKU, UPC, or vehicle application.",
+            ]
+        )
+
+    return "\n".join(
+        [
+            "**Resumen de la base de datos del catálogo**",
+            "",
+            f"- **Total de SKUs:** {summary['total_products']}",
+            f"- **Total de unidades en inventario:** {summary['total_stock']}",
+            f"- **Marcas registradas:** {summary['total_brands']}",
+            f"- **Bujías:** {summary['categories'].get('Bujías', 0)}",
+            f"- **Calentadores:** {summary['categories'].get('Calentadores', 0)}",
+            f"- **Marcas con más referencias:** {top_brands_text}",
+            "",
+            "Si quieres, también puedo filtrar ese resumen por marca, SKU, UPC o aplicación del vehículo.",
+        ]
+    )
+
+
+def try_inventory_summary_answer(query: str) -> tuple[str, list[str]] | None:
+    if not is_inventory_summary_query(query):
+        return None
+
+    return build_inventory_summary_answer(query), ["inventory.json"]
+
+
+def decode_image_data_url(image_data_url: str) -> tuple[str, str]:
+    match = re.match(r"^data:(image/[a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$", image_data_url.strip())
+    if not match:
+        raise ValueError("Image payload must be a valid base64 data URL.")
+
+    mime_type = match.group(1)
+    cleaned = re.sub(r"\s+", "", match.group(2))
+    _validated_image_bytes = base64.b64decode(cleaned, validate=True)
+    return mime_type, cleaned
+
+
+def build_multimodal_prompt(query: str) -> str:
+    normalized_query = query.strip()
+    if normalized_query:
+        return normalized_query
+    return (
+        "Analyze the attached autopart image, identify whether it looks closer to a spark plug, "
+        "glow plug, or diesel part, extract any visible markings, and ground the answer in the local catalog."
+    )
 
 
 def extract_gemini_text(payload: dict[str, Any]) -> str:
@@ -745,7 +871,7 @@ whisper_model = whisper.load_model("base")
 # ─────────────────────────────────────────────
 # 5. Helper functions
 # ─────────────────────────────────────────────
-def _call_github_models(messages: list[dict]) -> str:
+def _call_github_models(messages: list[dict[str, Any]]) -> str:
     """Send *messages* to GitHub Models with automatic retry on rate-limit errors.
 
     Makes up to 3 attempts. The delays before each attempt are:
@@ -791,8 +917,9 @@ def build_github_messages(
     query: str,
     docs: list[Document],
     history: list[tuple[str, str]] | None = None,
-) -> list[dict[str, str]]:
-    messages: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    image_data_url: str | None = None,
+) -> list[dict[str, Any]]:
+    messages: list[dict[str, Any]] = [{"role": "system", "content": SYSTEM_PROMPT}]
 
     for previous_user, previous_assistant in (history or [])[-4:]:
         if previous_user:
@@ -800,10 +927,18 @@ def build_github_messages(
         if previous_assistant:
             messages.append({"role": "assistant", "content": previous_assistant})
 
+    prompt_text = build_chat_user_message(build_multimodal_prompt(query), docs)
+    content: str | list[dict[str, Any]] = prompt_text
+    if image_data_url:
+        content = [
+            {"type": "text", "text": prompt_text},
+            {"type": "image_url", "image_url": {"url": image_data_url}},
+        ]
+
     messages.append(
         {
             "role": "user",
-            "content": build_chat_user_message(query, docs),
+            "content": content,
         }
     )
     return messages
@@ -813,8 +948,9 @@ def answer_with_github_models(
     query: str,
     docs: list[Document],
     history: list[tuple[str, str]] | None = None,
+    image_data_url: str | None = None,
 ) -> tuple[str, list[str]]:
-    messages = build_github_messages(query, docs, history)
+    messages = build_github_messages(query, docs, history, image_data_url=image_data_url)
 
     answer = _call_github_models(messages)
     sources = collect_source_skus(query, answer, docs)
@@ -825,9 +961,12 @@ def answer_with_huggingface(
     query: str,
     history: list[tuple[str, str]] | None = None,
     docs: list[Document] | None = None,
+    image_data_url: str | None = None,
 ) -> tuple[str, list[str]]:
     if huggingface_client is None:
         raise RuntimeError("Hugging Face LLM is not configured.")
+    if image_data_url:
+        raise RuntimeError("Image analysis requires GitHub Models or Gemini.")
 
     docs = docs or get_relevant_docs(query)
     exact_lookup = try_exact_lookup_answer(query, docs)
@@ -854,6 +993,7 @@ def answer_with_gemini(
     query: str,
     history: list[tuple[str, str]] | None = None,
     docs: list[Document] | None = None,
+    image_data_url: str | None = None,
 ) -> tuple[str, list[str]]:
     if not GEMINI_API_KEY:
         raise RuntimeError("Gemini is not configured.")
@@ -870,14 +1010,22 @@ def answer_with_gemini(
         if previous_assistant:
             contents.append({"role": "model", "parts": [{"text": previous_assistant}]})
 
+    user_parts: list[dict[str, Any]] = [{"text": build_chat_user_message(build_multimodal_prompt(query), docs)}]
+    if image_data_url:
+        mime_type, encoded_image = decode_image_data_url(image_data_url)
+        user_parts.append(
+            {
+                "inlineData": {
+                    "mimeType": mime_type,
+                    "data": encoded_image,
+                }
+            }
+        )
+
     contents.append(
         {
             "role": "user",
-            "parts": [
-                {
-                    "text": build_chat_user_message(query, docs)
-                }
-            ],
+            "parts": user_parts,
         }
     )
 
@@ -916,8 +1064,13 @@ def answer_with_gemini(
 def answer_query(
     query: str,
     history: list[tuple[str, str]] | None = None,
+    image_data_url: str | None = None,
 ) -> tuple[str, list[str]]:
-    docs = get_relevant_docs(query)
+    summary_answer = try_inventory_summary_answer(query)
+    if summary_answer is not None:
+        return summary_answer
+
+    docs = get_relevant_docs(query or DEFAULT_CATALOG_QUERY)
     exact_lookup = try_exact_lookup_answer(query, docs)
     if exact_lookup is not None:
         return exact_lookup
@@ -928,13 +1081,17 @@ def answer_query(
         "gemini": answer_with_gemini,
     }
     provider_order = get_provider_execution_order()
+    if image_data_url:
+        provider_order = [provider for provider in provider_order if provider in {"github", "gemini"}]
+        if not provider_order:
+            raise RuntimeError("Image analysis requires GitHub Models or Gemini credentials.")
     last_error: Exception | None = None
 
     for provider_name in provider_order:
         handler = handlers[provider_name]
         try:
             _log.info("Answering query with provider=%s", provider_name)
-            return handler(query, history=history, docs=docs)
+            return handler(query, history=history, docs=docs, image_data_url=image_data_url)
         except Exception as exc:
             last_error = exc
             _log.warning("Provider %s failed, trying next fallback if available: %s", provider_name, exc)
@@ -993,7 +1150,11 @@ def normalize_history(history: list[dict[str, str]] | None) -> list[tuple[str, s
     return normalized
 
 
-def chat_api(message: str, history: list[dict[str, str]] | None = None) -> dict[str, object]:
+def chat_api(
+    message: str,
+    history: list[dict[str, str]] | None = None,
+    image_data_url: str = "",
+) -> dict[str, object]:
     """Chat endpoint for web clients that need structured responses.
 
     Args:
@@ -1005,7 +1166,7 @@ def chat_api(message: str, history: list[dict[str, str]] | None = None) -> dict[
     """
     current_history = normalize_history(history)
 
-    if not message.strip():
+    if not message.strip() and not image_data_url.strip():
         return {
             "reply": "",
             "sources": [],
@@ -1013,12 +1174,18 @@ def chat_api(message: str, history: list[dict[str, str]] | None = None) -> dict[
         }
 
     try:
-        answer, sources = answer_query(message, current_history)
+        normalized_image_data_url = str(image_data_url or "").strip()
+        answer, sources = answer_query(
+            message,
+            current_history,
+            image_data_url=normalized_image_data_url or None,
+        )
     except Exception as exc:
         answer = _safe_llm_error_message(exc)
         sources = []
 
-    updated_history = current_history + [(message, answer)]
+    history_label = message or IMAGE_ONLY_HISTORY_LABEL
+    updated_history = current_history + [(history_label, answer)]
     return {
         "reply": answer,
         "sources": sources,
@@ -1034,6 +1201,7 @@ class ChatTurn(BaseModel):
 class ChatRequest(BaseModel):
     message: str = ""
     history: list[ChatTurn] = Field(default_factory=list)
+    imageDataUrl: str = ""
 
 
 class ChatResponse(BaseModel):
@@ -1059,6 +1227,7 @@ def chat_endpoint(payload: ChatRequest) -> ChatResponse:
     result = chat_api(
         payload.message,
         history=[turn.model_dump() for turn in payload.history],
+        image_data_url=payload.imageDataUrl,
     )
     raw_sources = result.get("sources", [])
     sources = raw_sources if isinstance(raw_sources, list) else []
@@ -1216,4 +1385,3 @@ if __name__ == "__main__":
             host=os.environ.get("GRADIO_SERVER_NAME", "127.0.0.1"),
             port=int(os.environ.get("PORT", os.environ.get("GRADIO_SERVER_PORT", "7860"))),
         )
-

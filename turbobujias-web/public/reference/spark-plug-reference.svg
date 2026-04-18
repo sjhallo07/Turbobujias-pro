@@ -1,0 +1,16 @@
+<svg width="640" height="360" viewBox="0 0 640 360" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="640" height="360" rx="28" fill="#0F172A"/>
+  <rect x="40" y="40" width="560" height="280" rx="24" fill="#111C34" stroke="#2D4C8F"/>
+  <g transform="translate(72 78)">
+    <rect x="0" y="64" width="308" height="52" rx="18" fill="#E2E8F0"/>
+    <rect x="48" y="42" width="160" height="96" rx="20" fill="#CBD5E1"/>
+    <rect x="78" y="28" width="104" height="124" rx="18" fill="#F8FAFC"/>
+    <rect x="110" y="0" width="40" height="44" rx="10" fill="#93C5FD"/>
+    <rect x="226" y="54" width="92" height="72" rx="18" fill="#94A3B8"/>
+    <path d="M318 88H452" stroke="#F8FAFC" stroke-width="18" stroke-linecap="round"/>
+    <path d="M452 88H498L526 56" stroke="#60A5FA" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="534" cy="48" r="16" fill="#FBBF24"/>
+  </g>
+  <text x="68" y="300" fill="#F8FAFC" font-family="Arial, Helvetica, sans-serif" font-size="26" font-weight="700">Bujía / Spark Plug</text>
+  <text x="68" y="328" fill="#94A3B8" font-family="Arial, Helvetica, sans-serif" font-size="18">Rosca corta, hex visible y electrodo de encendido.</text>
+</svg>
