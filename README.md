@@ -382,6 +382,9 @@ For mobile use, the storefront is a responsive web app that works in Android and
 Current production URL:
 
 - `https://sjhallo07-turbobujias-fullstack.hf.space`
+- `https://sjhallo07-turbobujias-fullstack.hf.space/api/dataset-viewer/healthcheck`
+
+The backend also exposes `/api/dataset-viewer/*` as a proxy to the Hugging Face datasets-server API. Override `DATASET_VIEWER_BASE_URL` in `backend/.env` or the Docker Space settings if you later switch to a self-hosted dataset-viewer backend.
 
 ---
 

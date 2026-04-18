@@ -73,6 +73,10 @@ function resolveChatbotApiBaseUrl(req) {
     return resolveBackendPublicUrl(req);
 }
 
+function resolveDatasetViewerBaseUrl() {
+    return normalizeBaseUrl(process.env.DATASET_VIEWER_BASE_URL) || 'https://datasets-server.huggingface.co';
+}
+
 function buildFrontendRedirect(req, pathname) {
     const frontendBaseUrl = resolveFrontendPublicUrl(req);
     if (!frontendBaseUrl) {
@@ -104,6 +108,13 @@ router.get('/public', (req, res) => {
             publicUrl: chatbotPublicUrl,
             requestUrl: `${chatbotApiBaseUrl}/chat`,
             metadataUrl: `${chatbotApiBaseUrl}/openapi.json`,
+        },
+        datasetViewer: {
+            publicUrl: `${backendPublicUrl}/api/dataset-viewer`,
+            healthUrl: `${backendPublicUrl}/api/dataset-viewer/healthcheck`,
+            splitsUrl: `${backendPublicUrl}/api/dataset-viewer/splits`,
+            firstRowsUrl: `${backendPublicUrl}/api/dataset-viewer/first-rows`,
+            upstreamBaseUrl: resolveDatasetViewerBaseUrl(),
         },
         links: {
             whatsappUrl: process.env.WHATSAPP_URL || 'https://api.whatsapp.com/send',
