@@ -7,6 +7,7 @@ const cors = require('cors');
 
 const authRoutes = require('./routes/auth');
 const configRoutes = require('./routes/config');
+const datasetViewerRoutes = require('./routes/datasetViewer');
 const inventoryRoutes = require('./routes/inventory');
 const paymentsRoutes = require('./routes/payments');
 
@@ -53,6 +54,7 @@ app.use(express.json());
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/config', configRoutes);
+app.use('/api/dataset-viewer', datasetViewerRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/payments', paymentsRoutes);
 

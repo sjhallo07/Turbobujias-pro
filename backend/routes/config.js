@@ -1,5 +1,6 @@
 const express = require('express');
 const { createPublicAuthConfig } = require('../auth/authStore');
+const { resolveDatasetViewerBaseUrl } = require('../helpers/datasetViewer');
 
 const router = express.Router();
 
@@ -104,6 +105,13 @@ router.get('/public', (req, res) => {
             publicUrl: chatbotPublicUrl,
             requestUrl: `${chatbotApiBaseUrl}/chat`,
             metadataUrl: `${chatbotApiBaseUrl}/openapi.json`,
+        },
+        datasetViewer: {
+            publicUrl: `${backendPublicUrl}/api/dataset-viewer`,
+            healthUrl: `${backendPublicUrl}/api/dataset-viewer/healthcheck`,
+            splitsUrl: `${backendPublicUrl}/api/dataset-viewer/splits`,
+            firstRowsUrl: `${backendPublicUrl}/api/dataset-viewer/first-rows`,
+            upstreamBaseUrl: resolveDatasetViewerBaseUrl(),
         },
         links: {
             whatsappUrl: process.env.WHATSAPP_URL || 'https://api.whatsapp.com/send',

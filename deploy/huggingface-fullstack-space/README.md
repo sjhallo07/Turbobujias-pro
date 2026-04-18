@@ -29,6 +29,7 @@ Expected public base URL for the repository-managed Space:
 
 - `/` — storefront
 - `/api/*` — backend API
+- `/api/dataset-viewer/*` — proxied Hugging Face dataset viewer API
 - `/api/ai-chat` — Next.js chatbot proxy
 - `/chatbot/` — public Gradio chatbot UI
 - `/chat` — chatbot REST endpoint
@@ -42,12 +43,15 @@ Set these in the Hugging Face Space settings as needed:
 - `GITHUB_MODELS_TOKEN` (optional alias)
 - `GEMINI_API_KEY` (optional fallback)
 - `HF_TOKEN` (optional if using Hugging Face inference)
+- `DATASET_VIEWER_BASE_URL` (optional override for a self-hosted dataset-viewer backend)
 - `PAYPAL_CLIENT_ID` / `PAYPAL_CLIENT_SECRET` (optional)
 - `MERCADOPAGO_ACCESS_TOKEN` (optional)
 
 ## Build notes
 
 The Docker image builds the storefront, installs the backend and chatbot dependencies, and serves everything through Nginx on port `7860`.
+
+By default, `/api/dataset-viewer/*` proxies the public Hugging Face datasets-server backend. Set `DATASET_VIEWER_BASE_URL` if you later deploy your own dataset-viewer service.
 
 ## Deploy from this repository with GitHub Actions
 
