@@ -4,7 +4,7 @@ const { pipeline } = require('node:stream/promises');
 const {
   resolveDatasetViewerBaseUrl,
   resolveDatasetViewerTimeoutMs,
-} = require('../lib/datasetViewer');
+} = require('../helpers/datasetViewer');
 
 const router = express.Router();
 
@@ -31,6 +31,7 @@ const FORWARDED_HEADERS = [
   'etag',
   'last-modified',
 ];
+const TIMEOUT_ERROR_CODES = new Set(['ECONNABORTED', 'ETIMEDOUT']);
 
 function buildUpstreamUrl(endpoint, query) {
   if (!ALLOWED_ENDPOINTS.has(endpoint)) {
@@ -85,7 +86,7 @@ async function proxyRequest(req, res) {
     res.status(response.status);
     await pipeline(response.data, res);
   } catch (error) {
-    const status = error.code === 'ECONNABORTED' || error.code === 'ETIMEDOUT' ? 504 : 502;
+    const status = TIMEOUT_ERROR_CODES.has(error.code) ? 504 : 502;
     res.status(status).json({
       error: 'dataset_viewer_unavailable',
       code: error.code || 'UNKNOWN',

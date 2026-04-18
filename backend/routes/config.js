@@ -1,6 +1,6 @@
 const express = require('express');
 const { createPublicAuthConfig } = require('../auth/authStore');
-const { resolveDatasetViewerBaseUrl } = require('../lib/datasetViewer');
+const { resolveDatasetViewerBaseUrl } = require('../helpers/datasetViewer');
 
 const router = express.Router();
 
