@@ -226,6 +226,8 @@ ENGLISH_HINT_TOKENS: frozenset[str] = frozenset(
         "barcode",
     }
 )
+DEFAULT_CATALOG_QUERY = "spark plug glow plug diesel part catalog"
+IMAGE_ONLY_HISTORY_LABEL = "[análisis de imagen / image analysis]"
 
 
 def detect_response_language(text: str) -> str:
@@ -437,9 +439,9 @@ def decode_image_data_url(image_data_url: str) -> tuple[str, str]:
         raise ValueError("Image payload must be a valid base64 data URL.")
 
     mime_type = match.group(1)
-    encoded = match.group(2).replace("\n", "").replace("\r", "")
-    base64.b64decode(encoded, validate=True)
-    return mime_type, encoded
+    cleaned = match.group(2).replace("\n", "").replace("\r", "")
+    base64.b64decode(cleaned, validate=True)
+    return mime_type, cleaned
 
 
 def build_multimodal_prompt(query: str) -> str:
@@ -1068,7 +1070,7 @@ def answer_query(
     if summary_answer is not None:
         return summary_answer
 
-    docs = get_relevant_docs(query or "spark plug glow plug diesel part catalog")
+    docs = get_relevant_docs(query or DEFAULT_CATALOG_QUERY)
     exact_lookup = try_exact_lookup_answer(query, docs)
     if exact_lookup is not None:
         return exact_lookup
@@ -1177,7 +1179,7 @@ def chat_api(
         answer = _safe_llm_error_message(exc)
         sources = []
 
-    history_label = message or "[image analysis request]"
+    history_label = message or IMAGE_ONLY_HISTORY_LABEL
     updated_history = current_history + [(history_label, answer)]
     return {
         "reply": answer,
