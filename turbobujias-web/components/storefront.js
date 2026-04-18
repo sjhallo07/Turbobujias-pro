@@ -785,7 +785,7 @@ export default function Storefront() {
   const stats = useMemo(() => {
     const lowStockCount = items.filter((item) => item.stock < 50).length;
     const glowPlugCount = items.filter((item) => item.type === "diesel_glow_plug").length;
-    const totalStock = items.reduce((sum, item) => sum + Number(item.stock || 0), 0);
+    const totalStock = items.reduce((sum, item) => sum + (parseInt(item.stock, 10) || 0), 0);
 
     return {
       totalProducts: items.length,

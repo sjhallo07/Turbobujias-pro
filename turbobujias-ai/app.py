@@ -227,7 +227,7 @@ ENGLISH_HINT_TOKENS: frozenset[str] = frozenset(
     }
 )
 DEFAULT_CATALOG_QUERY = "spark plug glow plug diesel part catalog"
-IMAGE_ONLY_HISTORY_LABEL = "[análisis de imagen / image analysis]"
+IMAGE_ONLY_HISTORY_LABEL = "[análisis de imagen]"
 
 
 def detect_response_language(text: str) -> str:
@@ -440,7 +440,7 @@ def decode_image_data_url(image_data_url: str) -> tuple[str, str]:
 
     mime_type = match.group(1)
     cleaned = re.sub(r"\s+", "", match.group(2))
-    _decoded_image = base64.b64decode(cleaned, validate=True)
+    _validated_image_bytes = base64.b64decode(cleaned, validate=True)
     return mime_type, cleaned
 
 
