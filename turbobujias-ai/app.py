@@ -3,7 +3,7 @@ Turbobujias AI Chatbot — Hugging Face Spaces
 RAG-based assistant for Diesel/Spark Plug compatibility queries.
 
 Stack:
-  - Gradio 4.x  (UI + Voice input via openai-whisper)
+  - Gradio 6.x  (UI + Voice input via openai-whisper)
   - sentence-transformers/all-MiniLM-L6-v2 (embeddings)
   - faiss-cpu (vector store)
   - mistralai/Mistral-7B-Instruct-v0.2 via HuggingFaceHub (LLM)
