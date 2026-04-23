@@ -6,7 +6,7 @@ export const dynamic = "force-dynamic";
 const SPACE_URL =
     process.env.HF_SPACE_URL ||
     process.env.NEXT_PUBLIC_HF_SPACE_URL ||
-    "https://sjhallo07-turbobujias-ai.hf.space";
+    "https://huggingface.co/spaces/sjhallo07/turbobujias-fullstack";
 const CHAT_API_NAME =
     process.env.HF_CHAT_API_NAME || process.env.NEXT_PUBLIC_HF_CHAT_API_NAME || "/chat";
 const HF_TOKEN = process.env.HF_TOKEN || "";

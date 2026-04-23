@@ -11,7 +11,7 @@ const SUGGESTED_PROMPTS = [
 ];
 
 const DEFAULT_PUBLIC_CHAT_URL =
-    process.env.NEXT_PUBLIC_HF_SPACE_URL || "https://sjhallo07-turbobujias-ai.hf.space";
+    process.env.NEXT_PUBLIC_HF_SPACE_URL || "https://huggingface.co/spaces/sjhallo07/turbobujias-fullstack";
 
 function buildGoogleSearchUrl(query) {
     const normalizedQuery = String(query || "").trim();

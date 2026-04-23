@@ -22,12 +22,12 @@
     "python-envs.pythonProjects": [
         {
             "path": "turbobujias-ai/app.py",
-            "envManager": "ms-python.python:venv",
+            "envManager": "ms-python.python:system",
             "packageManager": "ms-python.python:pip"
         },
         {
             "path": "turbobujias-ai/mcp_http_client.py",
-            "envManager": "ms-python.python:venv",
+            "envManager": "ms-python.python:system",
             "packageManager": "ms-python.python:pip"
         }
     ],
@@ -87,5 +87,7 @@
     "github.copilot.chat.agent.autoFix": true,
     "github.copilot.chat.additionalReadAccessPaths": [
         "\"C:\\Users\\ASUS\\tbai\""
-    ]
+    ],
+    "python.defaultInterpreterPath": "Python-3.10.20",
+    "python-envs.defaultEnvManager": "ms-python.python:system"
 }

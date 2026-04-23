@@ -21,7 +21,7 @@ import {
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001/api";
 const DEFAULT_HF_SPACE_URL =
-  process.env.NEXT_PUBLIC_HF_SPACE_URL || "https://sjhallo07-turbobujias-ai.hf.space";
+  process.env.NEXT_PUBLIC_HF_SPACE_URL || "https://huggingface.co/spaces/sjhallo07/turbobujias-fullstack";
 const DEFAULT_WHATSAPP_URL =
   process.env.NEXT_PUBLIC_WHATSAPP_URL || "https://api.whatsapp.com/send";
 const DEFAULT_INSTAGRAM_URL =
