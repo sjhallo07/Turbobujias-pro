@@ -4,6 +4,7 @@
         "dotenv.dotenvx-vscode",
         "ms-edgedevtools.vscode-edge-devtools",
         "ms-python.vscode-python-envs",
-        "eamodio.gitlens"
+        "eamodio.gitlens",
+        "supabase.vscode-supabase-extension"
     ]
 }
