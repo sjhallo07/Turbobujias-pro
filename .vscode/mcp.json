@@ -1,3 +1,4 @@
+
 {
 	"servers": {
 		"hf-mcp-server": {
@@ -49,7 +50,7 @@
 		{
 			"id": "token",
 			"type": "promptString",
-			"description": "",
+			"description": "GitHub personal access token for MCP authentication",
 			"password": true
 		}
 	]
