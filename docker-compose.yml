@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: turbobujias-backend
+    ports:
+      - "3001:3001"
+    environment:
+      PORT: 3001
+      BACKEND_PUBLIC_URL: http://localhost:3001
+      FRONTEND_PUBLIC_URL: http://localhost:3000
+      CHATBOT_PUBLIC_URL: https://sjhallo07-turbobujias-fullstack.hf.space/chatbot
+      DATASET_VIEWER_BASE_URL: https://datasets-server.huggingface.co
+      DATASET_VIEWER_TIMEOUT_MS: 15000
+      CORS_ALLOWED_ORIGINS: http://localhost:3000,http://127.0.0.1:3000,http://localhost:3002,http://127.0.0.1:3002
+      AUTH_SESSION_SECRET: change-this-session-secret
+      AUTH_SUPERADMIN_BOOTSTRAP_PASSWORD: TurboAdmin2026!
+      AUTH_SUPERADMIN_EMAILS: sjhallo07@turbobujiaspro.com,marcos.mora@turbobujiaspro.com
+      AUTH_SUPERADMIN_USERNAMES: sjhallo07,marcos.mora
+      FALLBACK_EXCHANGE_RATE: 36.50
+      FALLBACK_EUR_EXCHANGE_RATE: 39.50
+      EXCHANGE_RATE_CACHE_TTL_HOURS: 24
+    volumes:
+      - ./backend:/app/backend
+      - /app/backend/node_modules
+    networks:
+      - turbobujias
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: turbobujias-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api
+      HF_SPACE_URL: https://sjhallo07-turbobujias-fullstack.hf.space
+    volumes:
+      - ./turbobujias-web:/app/turbobujias-web
+      - /app/turbobujias-web/node_modules
+    networks:
+      - turbobujias
+
+networks:
+  turbobujias:
+    driver: bridge

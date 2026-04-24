@@ -1,0 +1,22 @@
+# Supabase Edge Functions Configuration
+# Project: auzubegrcawdobkfttpj
+
+# Storage upload - PUBLIC (no auth needed)
+[functions.upload-to-bucket]
+verify_jwt = false
+
+# Inventory import - AUTHENTICATED (user must be logged in)
+[functions.import-inventory]
+verify_jwt = true
+
+# Inventory scan/sell - AUTHENTICATED (user must be logged in)
+[functions.inventory-mediator]
+verify_jwt = true
+
+# Summarize thread - AUTHENTICATED (user must be logged in)
+[functions.summarize-thread]
+verify_jwt = true
+
+# Rapid function - AUTHENTICATED (if needed)
+[functions.rapid-function]
+verify_jwt = true

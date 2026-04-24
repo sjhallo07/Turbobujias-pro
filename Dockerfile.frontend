@@ -1,0 +1,12 @@
+FROM node:18-alpine
+
+WORKDIR /app/turbobujias-web
+
+COPY turbobujias-web/package*.json ./
+RUN npm install
+
+COPY turbobujias-web ./ 
+
+EXPOSE 3000
+
+CMD ["npm", "run", "dev"]

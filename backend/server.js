@@ -58,6 +58,12 @@ app.use('/api/dataset-viewer', datasetViewerRoutes);
 app.use('/api/inventory', inventoryRoutes);
 app.use('/api/payments', paymentsRoutes);
 
+// Storage routes (commented until storage.js exists)
+// app.use('/api/storage', storageRoutes);
+
+// AI routes (Gemini)
+// app.use('/api/ai', aiRoutes);
+
 // Health check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
