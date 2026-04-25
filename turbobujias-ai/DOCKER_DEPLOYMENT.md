@@ -18,7 +18,7 @@ docker build -t turbobujias-ai:latest -f Dockerfile.simple .
 ```bash
 docker run -it --rm \
   -e LLM_PROVIDER=gemini \
-  -e GEMINI_API_KEY="your_key_here" \
+  -e GEMINI_API_KEY="AIzaSyDYyk2zY6Dmjn5b-Ucq2AB-wDY9vhGdR1Q" \
   -p 7860:7860 \
   turbobujias-ai:latest
 ```
