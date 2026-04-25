@@ -5,6 +5,7 @@
         "ms-edgedevtools.vscode-edge-devtools",
         "ms-python.vscode-python-envs",
         "eamodio.gitlens",
-        "supabase.vscode-supabase-extension"
+        "supabase.vscode-supabase-extension",
+        "ms-vscode-remote.remote-containers"
     ]
 }

@@ -30,6 +30,10 @@
             "envManager": "ms-python.python:system",
             "packageManager": "ms-python.python:pip"
         }
+        "github.copilot.advanced": {
+    "authProvider": "github-enterprise"
+}
+
     ],
     "markdown.showToolbar": true,
     "chat.mcp.serverSampling": {
@@ -61,25 +65,11 @@
         "Turbobujias-pro/.vscode/mcp.json: hf-mcp-server": {
             "allowedModels": [
                 "copilot/auto",
-                "copilotcli/gpt-5.4",
-                "copilot/gemini-2.5-pro",
-                "copilot/gemini-3-flash-preview",
-                "copilot/gemini-3.1-pro-preview",
-                "copilotcli/gpt-4.1",
                 "copilot/gpt-4.1",
+                "copilotcli/gpt-4.1",
                 "copilot/gpt-4o",
-                "copilotcli/gpt-5-mini",
                 "copilot/gpt-5-mini",
-                "copilotcli/gpt-5.2",
-                "copilot/gpt-5.2",
-                "copilotcli/gpt-5.2-codex",
-                "copilot/gpt-5.2-codex",
-                "copilotcli/gpt-5.3-codex",
-                "copilot/gpt-5.3-codex",
-                "copilot/gpt-5.4",
-                "copilotcli/gpt-5.4-mini",
-                "copilot/gpt-5.4-mini",
-                "copilot/grok-code-fast-1",
+                "copilotcli/gpt-5-mini",
                 "copilot/oswe-vscode-prime"
             ]
         }
