@@ -1,0 +1,54 @@
+# Turbobujias — Full Stack Local Development
+# Chatbot + Frontend (all interfaces for local IP access)
+
+services:
+  chatbot:
+    build:
+      context: ./turbobujias-ai
+      dockerfile: Dockerfile.simple
+    container_name: turbobujias-chatbot
+    ports:
+      - "0.0.0.0:7860:7860"  # Listen on all interfaces
+    environment:
+      - GRADIO_SERVER_NAME=0.0.0.0
+      - GRADIO_SERVER_PORT=7860
+      - LOG_LEVEL=INFO
+      - LLM_PROVIDER=${LLM_PROVIDER:-github}
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - HF_TOKEN=${HF_TOKEN}
+      - SUPABASE_URL=${SUPABASE_URL}
+      - SUPABASE_ANON_KEY=${SUPABASE_ANON_KEY}
+    volumes:
+      - ./turbobujias-ai/app.py:/app/app.py
+      - ./turbobujias-ai/inventory.json:/app/inventory.json
+    networks:
+      - turbobujias
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: turbobujias-frontend
+    ports:
+      - "0.0.0.0:3000:3000"  # Listen on all interfaces
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:3001/api
+      - NEXT_PUBLIC_CHATBOT_URL=http://localhost:7860
+      - HF_SPACE_URL=https://sjhallo07-turbobujias-fullstack.hf.space
+    volumes:
+      - ./turbobujias-web:/app/turbobujias-web
+      - /app/turbobujias-web/node_modules
+      - /app/turbobujias-web/.next
+    networks:
+      - turbobujias
+
+networks:
+  turbobujias:
+    driver: bridge

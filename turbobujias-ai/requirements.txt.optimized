@@ -1,0 +1,33 @@
+# Turbobujias AI Chatbot - Requirements
+# Python 3.10 compatible, optimized for low-cost CPU-based deployment
+
+# Core Framework
+gradio==6.13.0
+uvicorn>=0.28.0
+pydantic>=2.0.0
+python-dotenv>=1.0.1
+
+# LLM & API Clients
+openai>=1.75.0
+requests>=2.32.0
+
+# Vector Embeddings & RAG
+transformers>=5.6.2
+sentence-transformers>=5.4.1
+faiss-cpu>=1.7.4
+langchain>=1.2.0,<2.0.0
+langchain-community>=0.4.0,<0.5.0
+langchain-text-splitters>=1.0.0,<2.0.0
+huggingface-hub>=0.22.2,<1.0
+
+# PyTorch (CPU version for lean containers)
+torch==2.2.2
+torchvision==0.17.2
+torchaudio==2.2.2
+accelerate>=1.13.0
+
+# Audio Transcription
+openai-whisper>=20230314
+
+# Optional: Supabase for vector persistence (Phase 2)
+# supabase>=2.28.3
