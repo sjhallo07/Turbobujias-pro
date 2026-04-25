@@ -30,4 +30,4 @@ accelerate>=1.13.0
 openai-whisper>=20230314
 
 # Optional: Supabase for vector persistence (Phase 2)
-# supabase>=2.28.3
+supabase>=2.28.3
